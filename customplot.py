@@ -19,7 +19,10 @@ roman = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"]
 
 # Set Plotter to Export SVG Vector Graphics
 mpl.use('svg')
-fontkit.install("Lato")
+try:
+    fontkit.install("Lato")
+except Exception:
+    pass  # font download unavailable; fall back to system sans-serif
 new_rc_params = {
     'text.usetex': False,
     'svg.fonttype': 'none',

@@ -140,13 +140,19 @@ def plot_ir_breakdown(
     save_path: str | None = "ir_breakdown.png",
 ) -> None:
     """
-    Stack plot showing V_cell decomposition into eta_kin, IR_solid, IR_ionic.
+    Two-panel voltage loss breakdown.
 
-    V_cell = U_ORR_eq_avg − |eta_kin| − IR_solid − IR_ionic
+    Left : stacked-area decomposition of total loss vs J. Kinetic
+           overpotential dominates; ohmic bands are labeled with %.
+    Right: ohmic-only losses (IR_ionic, IR_solid) on an expanded mV
+           scale, making the small contributions visible.
+
+    IR drops are read from the actual phi profiles (exact):
+        IR_ionic = phi_L[0]           (phi_L drops GDL face -> membrane ref=0)
+        IR_solid = phi_s[0] - phi_s[-1]
     """
-    N   = mesh.N
-    V   = np.asarray(voltages)
-    J   = _currents_mA_cm2(voltages, solutions, mesh, p)
+    N = mesh.N
+    J = _currents_mA_cm2(voltages, solutions, mesh, p)
 
     eta_kin_vals  = []
     ir_solid_vals = []
@@ -155,33 +161,71 @@ def plot_ir_breakdown(
 
     for u, V_cath in zip(solutions, voltages):
         ln_cO2, phi_L, phi_s = unpack(u, N)
-        c_O2   = np.exp(ln_cO2)
-        U_eq   = p.U_ORR_eq(c_O2)
-        eta    = (phi_s - phi_L) - U_eq
-        i_ORR  = R_ORR(ln_cO2, phi_s, phi_L, p)
-        w      = i_ORR / (np.sum(i_ORR) + 1e-30)       # reaction-rate weights
+        c_O2  = np.exp(ln_cO2)
+        U_eq  = p.U_ORR_eq(c_O2)
+        eta   = (phi_s - phi_L) - U_eq
+        i_ORR = R_ORR(ln_cO2, phi_s, phi_L, p)
+        w     = i_ORR / (np.sum(i_ORR) + 1e-30)
 
-        eta_kin_vals.append(float(np.dot(w, eta)))         # reaction-weighted avg eta
+        eta_kin_vals.append(float(np.dot(w, eta)))
         U_eq_avg_vals.append(float(np.dot(w, U_eq)))
 
-        # IR drops (estimate from uniform-reaction approximation)
-        i_total = float(np.sum(i_ORR) * mesh.dx)
-        ir_solid_vals.append(i_total / p.sigma_s_eff * p.L_CL)
-        ir_ionic_vals.append(i_total / p.kappa_L_eff * p.L_CL)
+        # IR drops from actual potential profiles (no approximation)
+        ir_ionic_vals.append(float(phi_L[0]))
+        ir_solid_vals.append(float(phi_s[0] - phi_s[-1]))
 
     eta_kin  = np.abs(np.array(eta_kin_vals))
     ir_solid = np.array(ir_solid_vals)
     ir_ionic = np.array(ir_ionic_vals)
 
-    fig, ax, _ = gengrid(1, 1, size_inches=(3.25, 2.5))
-    ax.stackplot(J, eta_kin * 1e3, ir_solid * 1e3, ir_ionic * 1e3,
-                 labels=["Kinetic |eta|", "IR solid", "IR ionic"],
-                 colors=[rainbow_2[1], rainbow_2[0], rainbow_2[5]],
-                 alpha=0.85)
-    ax.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax.set_ylabel("Overpotential  (mV)", fontsize=_LABELSIZE)
-    ax.set_title("IR breakdown — Stage 1", fontsize=9)
-    ax.legend(loc="upper left", fontsize=7, frameon=False)
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.5), ticklabel_size=7)
+    ax1, ax2 = axes[0], axes[1]
+
+    # Left: full stacked breakdown
+    ax1.stackplot(J,
+                  eta_kin  * 1e3,
+                  ir_ionic * 1e3,
+                  ir_solid * 1e3,
+                  labels=["Kinetic $|\\eta|$", "IR ionic", "IR solid"],
+                  colors=[rainbow_2[1], rainbow_2[0], rainbow_2[2]],
+                  alpha=0.85)
+    ax1.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
+    ax1.set_ylabel("Voltage loss  (mV)", fontsize=_LABELSIZE)
+    ax1.set_title("Voltage loss breakdown — Stage 1", fontsize=9)
+    ax1.legend(loc="upper left", fontsize=6, frameon=False)
+
+    # Percentage annotation at max J
+    idx_hc = int(np.argmax(np.abs(J)))
+    tot    = (eta_kin[idx_hc] + ir_ionic[idx_hc] + ir_solid[idx_hc]) * 1e3
+    ax1.text(0.97, 0.05,
+             f"At $J_{{max}}$:  kinetic {100*eta_kin[idx_hc]*1e3/tot:.1f}%  "
+             f"ionic {100*ir_ionic[idx_hc]*1e3/tot:.2f}%  "
+             f"solid {100*ir_solid[idx_hc]*1e3/tot:.2f}%",
+             transform=ax1.transAxes, ha="right", va="bottom",
+             fontsize=6, family="monospace",
+             bbox=dict(boxstyle="round,pad=0.25", fc="white", alpha=0.8))
+
+    # Right: ohmic only, expanded scale
+    ax2.plot(J, ir_ionic * 1e3, color=rainbow_2[0], lw=1.5,
+             label="IR ionic  ($\\kappa_L$)")
+    ax2.plot(J, ir_solid * 1e3, color=rainbow_2[2], lw=1.5,
+             label="IR solid  ($\\sigma_s$)")
+    ax2.fill_between(J, ir_ionic * 1e3, alpha=0.25, color=rainbow_2[0])
+    ax2.fill_between(J, ir_solid * 1e3, alpha=0.25, color=rainbow_2[2])
+    ax2.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
+    ax2.set_ylabel("Ohmic loss  (mV) — expanded", fontsize=_LABELSIZE)
+    ax2.set_title("Ohmic contributions (zoomed)", fontsize=9)
+    ax2.legend(fontsize=6, frameon=False)
+
+    for val, col, lbl in [
+        (ir_ionic[idx_hc] * 1e3, rainbow_2[0], "ionic"),
+        (ir_solid[idx_hc] * 1e3, rainbow_2[2], "solid"),
+    ]:
+        ax2.annotate(f"{val:.3f} mV ({lbl})",
+                     xy=(J[idx_hc], val),
+                     xytext=(-8, 6), textcoords="offset points",
+                     fontsize=6, color=col,
+                     arrowprops=dict(arrowstyle="-", color=col, lw=0.8))
 
     if save_path:
         fig.tight_layout()
