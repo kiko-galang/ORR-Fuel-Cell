@@ -1,5 +1,6 @@
 # Python bytecode caches
 __pycache__/
 *.py[cod]
+
 # OS
 .DS_Store
