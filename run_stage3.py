@@ -179,7 +179,7 @@ def main():
 
 
 def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
-    """Stage 3 diagnostic plots: polarization overlay + O2 profiles."""
+    """Stage 3 diagnostic plots: polarization overlay + ionomer O2 profiles."""
     import matplotlib.pyplot as plt
     from customplot import gengrid, rainbow_2, warm_sequential
     from assembly_stage1 import compute_current as cc1, unpack
@@ -191,37 +191,23 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
     J3 = np.array([compute_current_s3(u, mesh_gdl, mesh_cl, p) * 1e-4 * 1e3
                    for u in sols3])
 
-    fig, axes, _ = gengrid(1, 3, size_inches=(9.75, 3.0), ticklabel_size=7)
+    # Two panels at the same width used by every other figure in the chapter
+    fig, axes, _ = gengrid(1, 2, size_inches=(6.5, 2.5), ticklabel_size=7)
 
     # ── Panel 1: polarization overlay ────────────────────────────────────────
-    axes[0].plot(J1, vs1, marker="o", ms=4, lw=1.5, color=rainbow_2[1],
+    axes[0].plot(J1, vs1, marker="o", ms=3, lw=1.5, color=rainbow_2[1],
                  label="Stage 1 (ionomer only)")
-    axes[0].plot(J3, vs3, marker="s", ms=4, lw=1.5, ls="--", color=rainbow_2[4],
+    axes[0].plot(J3, vs3, marker="s", ms=3, lw=1.5, ls="--", color=rainbow_2[4],
                  label="Stage 3 (gas transport)")
     axes[0].set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=8)
-    axes[0].set_ylabel("$V_{cathode}$  (V vs SHE)", fontsize=8)
+    axes[0].set_ylabel("$V_{\\mathrm{cathode}}$  (V vs SHE)", fontsize=8)
     axes[0].set_title("Polarization: Stage 1 vs Stage 3", fontsize=9)
-    axes[0].legend(fontsize=7, frameon=False)
+    axes[0].legend(fontsize=6, frameon=False)
 
-    # ── Panel 2: O2 gas partial pressure across GDL+CL at highest current ────
-    u3_hc  = sols3[-1]
-    xg_um  = (mesh_gdl.xc - mesh_gdl.L) * 1e6   # negative (GDL is x<0)
+    # ── Panel 2: ionomer O2 profiles at several voltages ─────────────────────
     xc_um  = mesh_cl.xc * 1e6
-    ln_c_gdl, ln_c_cl, _, _ = unpack_s3(u3_hc, NG, NC)
-    p_O2_gdl = np.exp(ln_c_gdl) * p.R * p.T / 101325.0
-    p_O2_cl  = np.exp(ln_c_cl)  * p.R * p.T / 101325.0
-    axes[1].plot(xg_um, p_O2_gdl * 1e3, lw=1.5, color=rainbow_2[0], label="GDL")
-    axes[1].plot(xc_um, p_O2_cl  * 1e3, lw=1.5, color=rainbow_2[4], label="CL pores")
-    axes[1].axvline(0, color="k", lw=0.8, ls=":", label="GDL/CL interface")
-    axes[1].set_xlabel("x  (um from GDL/CL interface)", fontsize=8)
-    axes[1].set_ylabel("$p_{O_2}$  (matm)", fontsize=8)
-    axes[1].set_title(f"O2 partial pressure,  V = {vs3[-1]:.3f} V", fontsize=9)
-    axes[1].legend(fontsize=7, frameon=False)
-
-    # ── Panel 3: O2 profiles at several voltages ──────────────────────────────
     n3 = len(vs3)
-    idx_samples = [0, n3//4, n3//2, 3*n3//4, n3-1]
-    # Sequential warm ramp: pale (near OCV) -> dark (high current)
+    idx_samples = [0, n3 // 4, n3 // 2, 3 * n3 // 4, n3 - 1]
     cidx   = np.linspace(2, len(warm_sequential) - 1, len(idx_samples)).round().astype(int)
     colors = [warm_sequential[i] for i in cidx]
     for idx, col in zip(idx_samples, colors):
@@ -229,18 +215,19 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
         V3  = vs3[idx]
         _, ln_c_cl_i, _, _ = unpack_s3(u3, NG, NC)
         c_ion = p.K_eq_gas_ion * np.exp(ln_c_cl_i)
-        axes[2].plot(xc_um, c_ion, color=col, lw=1.5, label=f"V={V3:.3f}")
+        axes[1].plot(xc_um, c_ion, color=col, lw=1.5, label=f"V={V3:.3f}")
     # Stage 1 at highest current for comparison
     u1_hc = sols1[-1]
     ln1, _, _ = unpack(u1_hc, NC)
-    axes[2].plot(xc_um, np.exp(ln1), lw=1.2, ls="--", color=rainbow_2[1],
+    axes[1].plot(xc_um, np.exp(ln1), lw=1.2, ls="--", color=rainbow_2[1],
                  label=f"S1 V={vs1[-1]:.3f}")
-    axes[2].set_xlabel("x  (um)", fontsize=8)
-    axes[2].set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=8)
-    axes[2].set_title("Ionomer O2 profiles (Stage 3 vs Stage 1)", fontsize=9)
-    axes[2].legend(fontsize=6, frameon=False)
+    axes[1].set_xlabel("$x$  (μm)", fontsize=8)
+    axes[1].set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=8)
+    axes[1].set_title("Ionomer O$_2$ profiles (Stage 3 vs Stage 1)", fontsize=9)
+    axes[1].legend(fontsize=6, frameon=False)
 
     fig.tight_layout()
+    fig.subplots_adjust(left=0.12)
     fig.savefig("stage3_results.png", bbox_inches="tight")
     plt.close()
     print("  Saved: stage3_results.png")

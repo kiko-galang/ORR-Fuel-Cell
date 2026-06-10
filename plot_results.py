@@ -378,6 +378,7 @@ def plot_flux_profiles(
     )
 
     fig.tight_layout()
+    fig.subplots_adjust(left=0.14)   # prevent y-axis label clipping
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
         print(f"  Saved: {save_path}")
