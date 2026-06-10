@@ -306,7 +306,11 @@ def plot_flux_profiles(
     """
     Two-panel figure of face-centred fluxes along the CL at sampled voltages.
 
+<<<<<<< Updated upstream
     Left  : O2 diffusion flux J_O2(x) [μmol m-2 s-1] — enters at the GDL face
+=======
+    Left  : O2 diffusion flux J_O2(x) [mol m-2 s-1] — enters at the GDL face
+>>>>>>> Stashed changes
             (x=0) and reaches zero at the no-flux membrane face (x=L_CL).
     Right : Solid i_s(x) and ionic i_L(x) current densities [mA cm-2].
             i_s falls from i_total at x=0 to zero at x=L_CL; i_L rises
