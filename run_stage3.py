@@ -192,7 +192,7 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
                    for u in sols3])
 
     # Two panels at the same width used by every other figure in the chapter
-    fig, axes, _ = gengrid(1, 2, size_inches=(6.5, 2.5), ticklabel_size=7)
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 3.5), ticklabel_size=8)
 
     # ── Panel 1: polarization overlay ────────────────────────────────────────
     axes[0].plot(J1, vs1, marker="o", ms=3, lw=1.5, color=rainbow_2[1],

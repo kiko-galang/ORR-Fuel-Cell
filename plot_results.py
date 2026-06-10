@@ -331,7 +331,7 @@ def plot_flux_profiles(
     cidx   = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
     colors = [warm_sequential[i] for i in cidx]
 
-    fig, axes, _ = gengrid(1, 2, size_inches=(6.5, 2.5), ticklabel_size=7)
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 3.5), ticklabel_size=8)
     ax_J, ax_i = axes[0], axes[1]
 
     for V_t, col in zip(V_sample, colors):
