@@ -33,6 +33,8 @@ import matplotlib.pyplot as plt
 plt.switch_backend("Agg")
 import matplotlib.tri as mtri
 from matplotlib.colors import ListedColormap, to_rgba
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 
 from params import Params
 
@@ -243,6 +245,117 @@ def _draw_2d_layout(ax):
                  fontsize=9, pad=8)
 
 
+# ── 3D helpers ────────────────────────────────────────────────────────────────
+
+def _box_faces(x0, x1, y0, y1, z0, z1):
+    """The six quad faces of an axis-aligned box (for Poly3DCollection)."""
+    c = lambda x, y, z: (x, y, z)
+    return [
+        [c(x0, y0, z0), c(x1, y0, z0), c(x1, y1, z0), c(x0, y1, z0)],  # z = z0
+        [c(x0, y0, z1), c(x1, y0, z1), c(x1, y1, z1), c(x0, y1, z1)],  # z = z1
+        [c(x0, y0, z0), c(x1, y0, z0), c(x1, y0, z1), c(x0, y0, z1)],  # y = y0
+        [c(x0, y1, z0), c(x1, y1, z0), c(x1, y1, z1), c(x0, y1, z1)],  # y = y1
+        [c(x0, y0, z0), c(x0, y1, z0), c(x0, y1, z1), c(x0, y0, z1)],  # x = x0
+        [c(x1, y0, z0), c(x1, y1, z0), c(x1, y1, z1), c(x1, y0, z1)],  # x = x1
+    ]
+
+
+def _surface_grid_segments(xs, ys, zs):
+    """Grid line segments on the six outer faces of the box xs × ys × zs."""
+    segs = []
+    x0, x1 = xs[0], xs[-1]
+    y0, y1 = ys[0], ys[-1]
+    z0, z1 = zs[0], zs[-1]
+    for xf in (x0, x1):                       # x = const faces
+        segs += [[(xf, y, z0), (xf, y, z1)] for y in ys]
+        segs += [[(xf, y0, z), (xf, y1, z)] for z in zs]
+    for yf in (y0, y1):                       # y = const faces
+        segs += [[(x, yf, z0), (x, yf, z1)] for x in xs]
+        segs += [[(x0, yf, z), (x1, yf, z)] for z in zs]
+    for zf in (z0, z1):                       # z = const faces
+        segs += [[(x, y0, zf), (x, y1, zf)] for x in xs]
+        segs += [[(x0, y, zf), (x1, y, zf)] for y in ys]
+    return segs
+
+
+def _setup_3d(ax):
+    """Common 3D axes styling: equal-ish box, fixed view, no panes/ticks."""
+    ax.set_xlim(0, 2)
+    ax.set_ylim(0, 1)
+    ax.set_zlim(0, 1)
+    ax.set_box_aspect((2, 1, 1))
+    ax.view_init(elev=20, azim=-58)
+    ax.set_axis_off()
+
+
+def _draw_3d_generic(ax):
+    """Generic 3D hexahedral FV mesh: node / face / control-volume cell."""
+    xs = np.linspace(0, 2, 5)
+    ys = np.linspace(0, 1, 3)
+    zs = np.linspace(0, 1, 3)
+
+    ax.add_collection3d(Line3DCollection(_surface_grid_segments(xs, ys, zs),
+                                         colors="0.5", lw=0.7))
+
+    # highlight one front cell as the control volume
+    cell = _box_faces(xs[3], xs[4], ys[1], ys[2], zs[1], zs[2])
+    ax.add_collection3d(Poly3DCollection(cell, facecolor=_tint(BLUE, 0.45),
+                                         edgecolor=BLUE_DK, lw=0.9, alpha=0.92))
+
+    cx = 0.5 * (xs[3] + xs[4])
+    ax.text(cx, 0.5 * (ys[1] + ys[2]), zs[2] + 0.22, "control\nvolume",
+            color=BLUE_DK, fontsize=7, ha="center")
+
+    # a node (box corner)
+    ax.scatter([xs[0]], [ys[0]], [zs[-1]], color=BLUE, s=20, depthshade=False)
+    ax.text(xs[0] - 0.05, ys[0], zs[-1] + 0.16, "node", color="0.25",
+            fontsize=7, ha="center")
+
+    # a face of the highlighted cell — anchored on its visible right face
+    ax.text(xs[4] - 0.02, 0.5 * (ys[1] + ys[2]), zs[1] - 0.06,
+            "face ", color="0.25", fontsize=7, ha="right", va="center")
+
+    _setup_3d(ax)
+    ax.set_title("Hexahedral finite-volume mesh (3D)", fontsize=9, pad=2)
+
+
+def _draw_3d_layout(ax):
+    """3D model layout: coarse GDL block + finer CL block, discrete colours."""
+    x_if = 1.4
+
+    # GDL block (coarse)
+    gx, gy, gz = np.linspace(0, x_if, 4), np.linspace(0, 1, 3), np.linspace(0, 1, 3)
+    ax.add_collection3d(Poly3DCollection(_box_faces(0, x_if, 0, 1, 0, 1),
+                                         facecolor=_tint(BLUE, 0.30),
+                                         edgecolor="none", alpha=0.55))
+    ax.add_collection3d(Line3DCollection(_surface_grid_segments(gx, gy, gz),
+                                         colors="0.45", lw=0.6))
+
+    # CL block (finer)
+    cx, cy, cz = np.linspace(x_if, 2, 4), np.linspace(0, 1, 5), np.linspace(0, 1, 5)
+    ax.add_collection3d(Poly3DCollection(_box_faces(x_if, 2, 0, 1, 0, 1),
+                                         facecolor=_tint(ORANGE, 0.38),
+                                         edgecolor="none", alpha=0.62))
+    ax.add_collection3d(Line3DCollection(_surface_grid_segments(cx, cy, cz),
+                                         colors="0.45", lw=0.6))
+
+    ax.text(0.5 * x_if, 0.5, 1.22, "GDL", color=BLUE_DK, fontsize=9, ha="center")
+    ax.text(0.5 * (x_if + 2), 0.5, 1.22, "CL", color=ORANGE_DK, fontsize=9, ha="center")
+    ax.text(x_if, 1.05, 0.0, "GDL/CL\ninterface", color="0.3", fontsize=6.5, ha="center")
+
+    _setup_3d(ax)
+    ax.set_title("Model layout: gas-diffusion + catalyst layers",
+                 fontsize=9, pad=2)
+
+
+def _panel_label(ax, lab, is3d=False):
+    """Manual a)/b)/... label (for figures not built through gengrid)."""
+    ax.text2D(0.02, 1.06, f"{lab})", transform=ax.transAxes, fontsize=11,
+              va="bottom", ha="left") if is3d else \
+        ax.text(0.0, 1.02, f"{lab})", transform=ax.transAxes, fontsize=11,
+                va="bottom", ha="left")
+
+
 # ── Figures ───────────────────────────────────────────────────────────────────
 
 def plot_mesh_1d(p, save_path="mesh_1d.png"):
@@ -263,15 +376,39 @@ def plot_mesh_2d(save_path="mesh_2d_tri.png"):
     plt.close(fig)
 
 
+def plot_mesh_3d(p, save_path="mesh_3d.png"):
+    fig = plt.figure(figsize=(7.0, 3.4))
+    ax_a = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_b = fig.add_subplot(1, 2, 2, projection="3d")
+    _draw_3d_generic(ax_a)
+    _draw_3d_layout(ax_b)
+    _panel_label(ax_a, "a", is3d=True)
+    _panel_label(ax_b, "b", is3d=True)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.96, bottom=0.02, wspace=0.05)
+    _save(fig, save_path)
+    plt.close(fig)
+
+
 def plot_mesh_combined(p, save_path="mesh_combined.png"):
-    # 2x2: rows = dimensionality (1D top, 2D bottom);
+    # 3x2: rows = dimensionality (1D / 2D / 3D);
     #      cols = generic mesh (left) vs GDL/CL model layout (right).
-    fig, axes, _ = gengrid(2, 2, size_inches=(8.5, 6.2), ticklabel_size=8)
-    _draw_1d_generic(axes[0][0])
-    _draw_1d_layout(axes[0][1], p)
-    _draw_2d_generic(axes[1][0])
-    _draw_2d_layout(axes[1][1])
-    fig.tight_layout(h_pad=2.2, w_pad=2.4)
+    fig = plt.figure(figsize=(8.5, 9.2))
+    gs  = fig.add_gridspec(3, 2)
+
+    ax_a = fig.add_subplot(gs[0, 0]); _draw_1d_generic(ax_a)
+    ax_b = fig.add_subplot(gs[0, 1]); _draw_1d_layout(ax_b, p)
+    ax_c = fig.add_subplot(gs[1, 0]); _draw_2d_generic(ax_c)
+    ax_d = fig.add_subplot(gs[1, 1]); _draw_2d_layout(ax_d)
+    ax_e = fig.add_subplot(gs[2, 0], projection="3d"); _draw_3d_generic(ax_e)
+    ax_f = fig.add_subplot(gs[2, 1], projection="3d"); _draw_3d_layout(ax_f)
+
+    for ax, lab in [(ax_a, "a"), (ax_b, "b"), (ax_c, "c"), (ax_d, "d")]:
+        _panel_label(ax, lab)
+    _panel_label(ax_e, "e", is3d=True)
+    _panel_label(ax_f, "f", is3d=True)
+
+    fig.subplots_adjust(left=0.03, right=0.97, top=0.96, bottom=0.02,
+                        hspace=0.30, wspace=0.18)
     _save(fig, save_path)
     plt.close(fig)
 
@@ -281,6 +418,7 @@ def main():
     print("  Generating mesh schematics ...")
     plot_mesh_1d(p)
     plot_mesh_2d()
+    plot_mesh_3d(p)
     plot_mesh_combined(p)
     print("  Done.")
 
