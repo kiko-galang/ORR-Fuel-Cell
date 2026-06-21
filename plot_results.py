@@ -384,3 +384,198 @@ def plot_flux_profiles(
         print(f"  Saved: {save_path}")
 
     plt.close(fig)
+
+
+# Micron label that renders in the Lato/mathtext font (raw U+03BC has no glyph)
+_UM = "$x$  ($\\mu$m)"
+
+
+# ── 6. Stage 4: polarization overlay (Stage 1 vs 3 vs 4) ──────────────────────
+
+def plot_stage4_polarization(
+    vs1, sols1, mesh_cl,
+    vs3, sols3,
+    vs4, sols4, mesh_gdl,
+    p,
+    save_path: str | None = "stage4_polarization.png",
+) -> None:
+    """
+    Polarization curves for Stage 1, Stage 3 and Stage 4 on one axis, with the
+    Stage 3 -> Stage 4 limiting-current gap (the ionomer-film interphase loss)
+    annotated.
+    """
+    from assembly_stage1 import compute_current as cc1
+    from assembly_stage3 import compute_current_s3
+    from assembly_stage4 import compute_current_s4
+
+    J1 = np.array([cc1(u, mesh_cl, p) * 1e-1 for u in sols1])            # mA/cm2
+    J3 = np.array([compute_current_s3(u, mesh_gdl, mesh_cl, p) * 1e-1 for u in sols3])
+    J4 = np.array([compute_current_s4(u, mesh_gdl, mesh_cl, p) * 1e-1 for u in sols4])
+
+    fig, ax, _ = gengrid(1, 1, size_inches=(3.5, 2.9), ticklabel_size=8,
+                         genlabels=False)
+    ax.plot(J1, vs1, marker="o", ms=3, lw=1.5, color=rainbow_2[0],
+            label="Stage 1  (ionomer only)")
+    ax.plot(J3, vs3, marker="s", ms=3, lw=1.5, ls="--", color=rainbow_2[4],
+            label="Stage 3  (gas, local equil.)")
+    ax.plot(J4, vs4, marker="^", ms=3.5, lw=1.6, ls="-", color=rainbow_2[2],
+            label="Stage 4  (finite-rate + M-S)")
+
+    # Annotate the Stage 3 -> Stage 4 limiting-current gap at the lowest voltage.
+    V_lo = float(min(np.min(vs3), np.min(vs4)))
+    j3_lo = float(J3[int(np.argmin(vs3))])
+    j4_lo = float(J4[int(np.argmin(vs4))])
+    ax.annotate("", xy=(j3_lo, V_lo), xytext=(j4_lo, V_lo),
+                arrowprops=dict(arrowstyle="<->", color="0.35", lw=0.9))
+    ax.text(0.5 * (j3_lo + j4_lo), V_lo + 0.012,
+            f"film loss\n{(j3_lo - j4_lo) / j3_lo * 100:.0f}%",
+            ha="center", va="bottom", fontsize=6, color="0.25")
+
+    ax.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
+    ax.set_ylabel("$V_{\\mathrm{cathode}}$  (V vs SHE)", fontsize=_LABELSIZE)
+    ax.set_title("Polarization: Stage 1 vs 3 vs 4", fontsize=9)
+    ax.legend(fontsize=6, frameon=False, loc="upper right")
+
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+        print(f"  Saved: {save_path}")
+    plt.close(fig)
+
+
+# ── 7. Stage 4: gas / dissolved / equilibrium O2 profiles ─────────────────────
+
+def plot_stage4_o2_profiles(
+    vs4, sols4, mesh_gdl, mesh_cl, p,
+    V_sample: list[float] | None = None,
+    save_path: str | None = "stage4_o2_profiles.png",
+) -> None:
+    """
+    Two-panel Stage 4 O2 profiles at sampled voltages.
+
+    a) Full-domain pore-gas O2 from the gas channel (x=0) through the GDL and CL
+       (dashed line marks the GDL/CL interface).  The gas depletes only mildly,
+       showing gas transport is not the bottleneck here.
+    b) CL dissolved O2 c_ion(x) vs the local equilibrium K_eq*c_gas(x).  The
+       shaded gap at the highest current is the finite-rate interphase
+       (ionomer-film) transport resistance — the dominant loss.
+    """
+    from assembly_stage4 import unpack_s4
+
+    NG, NC = mesh_gdl.N, mesh_cl.N
+    if V_sample is None:
+        n = len(vs4)
+        V_sample = [vs4[0], vs4[n // 3], vs4[2 * n // 3], vs4[-1]]
+
+    V_arr   = np.asarray(vs4)
+    x_gdl   = mesh_gdl.xc * 1e6                       # 0 .. L_GDL  [um]
+    x_cl    = (p.L_GDL + mesh_cl.xc) * 1e6            # L_GDL .. L_GDL+L_CL [um]
+    xc_cl   = mesh_cl.xc * 1e6                        # CL-local coordinate [um]
+    x_if    = p.L_GDL * 1e6                           # GDL/CL interface [um]
+    cidx    = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
+    colors  = [warm_sequential[i] for i in cidx]
+
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 3.0), ticklabel_size=8)
+    ax_gas, ax_ion = axes[0], axes[1]
+
+    lowest = None
+    for V_t, col in zip(V_sample, colors):
+        idx = int(np.argmin(np.abs(V_arr - V_t)))
+        u   = sols4[idx]
+        lbl = f"$V$ = {vs4[idx]:.3f} V"
+        ln_c_gdl, ln_c_gas, ln_c_ion, _, _ = unpack_s4(u, NG, NC)
+        c_gdl = np.exp(ln_c_gdl)
+        c_gas = np.exp(ln_c_gas)
+        c_ion = np.exp(ln_c_ion)
+        c_eq  = p.K_eq_gas_ion * c_gas
+
+        # Panel a: continuous gas profile across GDL + CL
+        ax_gas.plot(np.concatenate([x_gdl, x_cl]),
+                    np.concatenate([c_gdl, c_gas]),
+                    color=col, lw=1.5, label=lbl)
+
+        # Panel b: dissolved (solid) vs equilibrium (dotted)
+        ax_ion.plot(xc_cl, c_ion, color=col, lw=1.6, ls="-")
+        ax_ion.plot(xc_cl, c_eq,  color=col, lw=1.0, ls=":")
+        lowest = (xc_cl, c_ion, c_eq, col)
+
+    # Shade the interphase gap at the highest-current (lowest-V) case
+    if lowest is not None:
+        xc_cl, c_ion, c_eq, col = lowest
+        ax_ion.fill_between(xc_cl, c_ion, c_eq, color=col, alpha=0.18,
+                            lw=0, label="interphase gap")
+
+    ax_gas.axvline(x_if, color="0.5", lw=0.9, ls="--")
+    ax_gas.axhline(p.c_O2_gas_inlet, color="0.7", lw=0.8, ls=":")
+    ax_gas.text(x_if - 4, ax_gas.get_ylim()[0], " GDL", ha="right", va="bottom",
+                fontsize=6, color="0.4")
+    ax_gas.text(x_if + 4, ax_gas.get_ylim()[0], "CL ", ha="left", va="bottom",
+                fontsize=6, color="0.4")
+    ax_gas.set_xlabel(_UM.replace("$x$", "$x$ from gas channel"), fontsize=_LABELSIZE)
+    ax_gas.set_ylabel("$c_{O_2}$ gas  (mol m$^{-3}$)", fontsize=_LABELSIZE)
+    ax_gas.set_title("Pore-gas O$_2$  (GDL + CL)", fontsize=9)
+    ax_gas.legend(fontsize=5.5, frameon=False, loc="lower left")
+
+    ax_ion.set_xlabel(_UM.replace("$x$", "$x$ in CL"), fontsize=_LABELSIZE)
+    ax_ion.set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=_LABELSIZE)
+    ax_ion.set_title("Dissolved vs equilibrium $K_{eq}c_{gas}$", fontsize=9)
+    from matplotlib.lines import Line2D
+    ax_ion.legend(
+        handles=[
+            Line2D([0], [0], color="gray", ls="-", lw=1.6, label="dissolved $c_{ion}$"),
+            Line2D([0], [0], color="gray", ls=":", lw=1.2, label="equil. $K_{eq}c_{gas}$"),
+        ],
+        fontsize=5.5, frameon=False, loc="center right",
+    )
+
+    fig.tight_layout()
+    fig.subplots_adjust(left=0.10, wspace=0.32)
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+        print(f"  Saved: {save_path}")
+    plt.close(fig)
+
+
+# ── 8. Stage 4: limiting current vs k_v ───────────────────────────────────────
+
+def plot_kv_sweep(
+    kv_list, Jlim, J3_lim, kv_default,
+    save_path: str | None = "stage4_kv_sweep.png",
+) -> None:
+    """
+    Limiting current vs interphase coefficient k_v, with the Stage 3
+    (k_v -> inf, local-equilibrium) value drawn as the horizontal asymptote.
+    """
+    kv = np.asarray(kv_list, float)
+    J  = np.asarray(Jlim, float)
+    ok = np.isfinite(J)
+
+    fig, ax, _ = gengrid(1, 1, size_inches=(3.5, 2.9), ticklabel_size=8,
+                         genlabels=False)
+
+    # Shade the transport-limited (low-k_v) vs equilibrium (high-k_v) regimes
+    ax.axhline(J3_lim, color=rainbow_2[4], ls="--", lw=1.2,
+               label="Stage 3  ($k_v\\!\\to\\!\\infty$)")
+    ax.semilogx(kv[ok], J[ok], marker="o", ms=4, lw=1.6, color=rainbow_2[2],
+                label="Stage 4  $J_{\\lim}(k_v)$")
+    ax.axvline(kv_default, color="0.5", ls=":", lw=1.0)
+
+    # Mark the default operating point
+    i_def = int(np.argmin(np.abs(kv - kv_default)))
+    if np.isfinite(J[i_def]):
+        ax.plot(kv[i_def], J[i_def], marker="*", ms=11, color="0.15", zorder=5)
+        ax.annotate(f"default $k_v$\n{kv_default:.0e} s$^{{-1}}$",
+                    xy=(kv[i_def], J[i_def]),
+                    xytext=(8, -22), textcoords="offset points",
+                    fontsize=6, color="0.2", ha="left")
+
+    ax.set_xlabel("$k_v = k_{MT}\\,a_{GL}$  (s$^{-1}$)", fontsize=_LABELSIZE)
+    ax.set_ylabel("Limiting current  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
+    ax.set_title("Limiting current vs interphase transfer rate", fontsize=9)
+    ax.legend(fontsize=6, frameon=False, loc="center right")
+
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+        print(f"  Saved: {save_path}")
+    plt.close(fig)
