@@ -122,6 +122,11 @@ def plot_profiles(
         ax.set_xlabel("$x$  (um)", fontsize=_LABELSIZE)
         ax.legend(fontsize=6, frameon=False)
 
+    # c_O2 curves decay from the left, leaving an empty band on the centre-right;
+    # use 2 columns so the legend is short (2 rows) and stays clear of the curves
+    ax_c.legend(fontsize=6, frameon=False, loc="center right", ncol=2,
+                columnspacing=1.0, handletextpad=0.4, bbox_to_anchor=(0.99, 0.72))
+
     fig.tight_layout()
 
     if save_path:
@@ -573,6 +578,123 @@ def plot_kv_sweep(
     ax.set_ylabel("Limiting current  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
     ax.set_title("Limiting current vs interphase transfer rate", fontsize=9)
     ax.legend(fontsize=6, frameon=False, loc="center right")
+
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+        print(f"  Saved: {save_path}")
+    plt.close(fig)
+
+
+# ── 9. Stage 4: applied-voltage loss breakdown ────────────────────────────────
+
+def plot_voltage_breakdown_s4(
+    voltages, solutions, mesh_gdl, mesh_cl, p,
+    save_path: str | None = "stage4_voltage_breakdown.png",
+) -> None:
+    """
+    Stage 4 applied-voltage breakdown (AVB) by the power-loss post-processing
+    method of Gerhardt et al., J. Electrochem. Soc. 168, 074503 (2021).
+
+    Each loss is the volumetric power dissipated by a mechanism, divided by the
+    cell current density, so the contributions sum EXACTLY to U_OCV - V:
+
+      ohmic, ionic : ∫_CL (i_L^2 / κ_eff) dx / I_cell           (Joule, Eq. 18)
+      ohmic, solid : ∫_CL (i_s^2 / σ_eff) dx / I_cell           (Joule, Eq. 18)
+      mass-transp. : ∫_CL i_ORR (RT/α_c F) ln((c_ref/c)^γ) dx / I_cell  (Eq. 23)
+                       gas  : reference c = pore-gas O2 c_gas
+                       film : reference c = dissolved O2 c_ion (vs K_eq c_gas)
+      kinetic      : (U_OCV - V) - (ohmic + mass-transport)     (activation)
+
+    The ohmic terms are the Joule integrals (NOT the boundary potential drops),
+    and the concentration/mass-transport terms use the kinetic RT/(α_c F) form
+    (NOT the Nernst RT/4F), per the power-loss derivation.  With these
+    definitions the activation overpotential is the well-defined remainder and
+    carries no thermodynamic or transport content.  The 'film' term is the
+    Stage-4 interphase (ionomer-film) resistance.
+    """
+    from assembly_stage4 import unpack_s4, compute_current_s4
+    from transport import ohmic_face_fluxes
+
+    NG, NC = mesh_gdl.N, mesh_cl.N
+    dx     = mesh_cl.dx
+    RTaF   = p.R * p.T / (p.alpha * p.F)             # Eq. 23 prefactor RT/(α_c F)
+    U_ocv  = float(p.U_ORR_eq(p.c_O2_bc))            # inlet-equilibrium OCV
+
+    J, kin, film, gas, ohm_i, ohm_s, tot = ([] for _ in range(7))
+    for u, V in zip(solutions, voltages):
+        _, ln_cg, ln_ci, phi_L, phi_s = unpack_s4(u, NG, NC)
+        c_gas = np.exp(ln_cg)
+        c_ion = np.exp(ln_ci)
+        c_eq  = p.K_eq_gas_ion * c_gas
+        i_ORR = R_ORR(ln_ci, phi_s, phi_L, p)
+        Icell = float(np.sum(i_ORR) * dx)
+        w     = i_ORR / (np.sum(i_ORR) + 1e-30)
+
+        # ohmic Joule integrals (cell-centred currents from the face fluxes)
+        iL = ohmic_face_fluxes(phi_L, dx, p.kappa_L_eff, None, p.phi_L_mem)
+        iS = ohmic_face_fluxes(phi_s, dx, p.sigma_s_eff, V, None)
+        iLc = 0.5 * (iL[:-1] + iL[1:])
+        iSc = 0.5 * (iS[:-1] + iS[1:])
+        oi = float(np.sum(iLc ** 2 / p.kappa_L_eff) * dx / Icell)
+        os = float(np.sum(iSc ** 2 / p.sigma_s_eff) * dx / Icell)
+
+        # mass-transport (Eq. 23): RT/(α_c F) * γ * <ln(c_ref / c)>_w
+        mtg = float(RTaF * p.gamma * np.dot(
+            w, np.log(np.maximum(p.c_O2_gas_inlet / c_gas, 1e-30))))
+        mtf = float(RTaF * p.gamma * np.dot(
+            w, np.log(np.maximum(c_eq / c_ion, 1e-30))))
+
+        t_ = U_ocv - float(V)
+        gas.append(mtg); film.append(mtf); ohm_i.append(oi); ohm_s.append(os)
+        tot.append(t_)
+        kin.append(t_ - oi - os - mtg - mtf)         # activation = remainder
+        J.append(compute_current_s4(u, mesh_gdl, mesh_cl, p) * 1e-1)   # mA/cm2
+
+    J = np.asarray(J)
+    stacks = [np.clip(np.asarray(v), 0, None) * 1e3
+              for v in (kin, film, gas, ohm_i, ohm_s)]
+    labels = ["Kinetic (activation)", "Mass transp. (ionomer film)",
+              "Mass transp. (gas-phase)", "Ohmic (ionic)", "Ohmic (solid)"]
+    colors = [rainbow_2[1], rainbow_2[3], rainbow_2[5], rainbow_2[0], rainbow_2[2]]
+    tot = np.asarray(tot) * 1e3
+
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=7)
+    ax1, ax2 = axes[0], axes[1]
+
+    # ── Left: full stacked breakdown (sums exactly to U_OCV - V) ─────────────
+    ax1.stackplot(J, *stacks, labels=labels, colors=colors, alpha=0.9)
+    ax1.plot(J, tot, color="k", lw=1.0, ls="--", label="$U_{OCV}-V$")
+    ax1.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
+    ax1.set_ylabel("Voltage loss  (mV)", fontsize=_LABELSIZE)
+    ax1.set_title("Stage 4 applied-voltage breakdown (power-loss)", fontsize=9)
+    # headroom so the legend sits above the filled stack, not over it
+    ax1.set_ylim(0, float(tot.max()) * 1.5)
+    ax1.legend(loc="upper left", fontsize=5.5, frameon=False, ncol=2)
+
+    idx = int(np.argmax(J))
+    parts = [s[idx] for s in stacks]
+    tt = sum(parts)
+    ax1.text(0.97, 0.05,
+             f"At $J_{{max}}$: kin {100*parts[0]/tt:.0f}%  "
+             f"film {100*parts[1]/tt:.1f}%  gas {100*parts[2]/tt:.1f}%  "
+             f"ohm {100*(parts[3]+parts[4])/tt:.1f}%",
+             transform=ax1.transAxes, ha="right", va="bottom", fontsize=5.5,
+             family="monospace",
+             bbox=dict(boxstyle="round,pad=0.25", fc="white", alpha=0.85))
+
+    # ── Right: each non-kinetic loss INDIVIDUALLY (not stacked), expanded ─────
+    for s, c, lbl in [
+        (stacks[1], rainbow_2[3], "Mass transp. (film)"),
+        (stacks[3], rainbow_2[0], "Ohmic (ionic)"),
+        (stacks[2], rainbow_2[5], "Mass transp. (gas)"),
+        (stacks[4], rainbow_2[2], "Ohmic (solid)"),
+    ]:
+        ax2.plot(J, s, color=c, lw=1.6, label=lbl)
+    ax2.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
+    ax2.set_ylabel("Loss  (mV) — expanded", fontsize=_LABELSIZE)
+    ax2.set_title("Non-kinetic losses (each from zero)", fontsize=9)
+    ax2.legend(fontsize=5.5, frameon=False, loc="upper left")
 
     fig.tight_layout()
     if save_path:
