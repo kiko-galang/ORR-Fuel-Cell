@@ -68,6 +68,18 @@ class Params:
     D_O2_N2_bulk: float = 3.5e-5  # m2/s  (O2/N2, 80 degC, 1 atm, Chapman-Enskog)
     eps_G_gdl:    float = 0.78     # GDL macro-pore fraction (Toray carbon paper)
 
+    # ── Interphase gas<->ionomer O2 mass transfer (Stage 4) ──────────────────
+    # Finite-rate dissolution of pore-gas O2 into the ionomer film, replacing
+    # Stage 3's instantaneous Henry's-law equilibrium.  This captures the
+    # ionomer-film local O2 transport resistance — the dominant loss in
+    # low-Pt cathodes.  Defaults:
+    #   k_MT_GL ~ D_O2_ionomer / delta_film  (film ~13 nm, D ~1.3e-10 m2/s)
+    #   a_GL    ~ gas/ionomer interfacial area per CL volume (agglomerate film)
+    # giving k_v = k_MT_GL * a_GL ~ 5e4 1/s, finite enough that the film
+    # resistance visibly lowers the limiting current vs Stage 3.
+    k_MT_GL: float = 1.0e-2   # m/s   interphase mass-transfer coefficient
+    a_GL:    float = 5.0e6     # 1/m   gas/ionomer interfacial area per CL volume
+
     # ── Derived (auto-computed; do not set manually) ──────────────────────────
     D_O2_eff:       float = field(init=False, repr=False)
     kappa_L_eff:    float = field(init=False, repr=False)
@@ -81,6 +93,9 @@ class Params:
     D_O2_cl_gas_eff: float = field(init=False, repr=False)
     K_eq_gas_ion:    float = field(init=False, repr=False)
     c_O2_gas_inlet:  float = field(init=False, repr=False)
+    # Stage 4 derived
+    k_v:             float = field(init=False, repr=False)
+    c_tot:           float = field(init=False, repr=False)
 
     def __post_init__(self):
         self.recompute()
@@ -120,6 +135,16 @@ class Params:
         # Gas-channel inlet O2 concentration (ideal gas, p_O2_inlet in atm)
         self.c_O2_gas_inlet  = self.p_O2_inlet * 101325.0 / (self.R * self.T)
 
+        # Stage 4: volumetric interphase (gas<->ionomer) transfer coefficient
+        #   k_v [1/s] = k_MT_GL [m/s] * a_GL [1/m]
+        # R_PT = k_v * (K_eq*c_gas - c_ion) is the net O2 rate INTO the ionomer.
+        self.k_v = self.k_MT_GL * self.a_GL
+
+        # Total molar gas concentration [mol/m3] (ideal gas at 1 atm).
+        # Used by the Maxwell-Stefan / stagnant-film flux law to form the
+        # mole fraction x_O2 = c_O2_gas / c_tot for the (1 - x_O2) correction.
+        self.c_tot = 101325.0 / (self.R * self.T)
+
     def H_O2(self) -> float:
         """Henry's constant for O2 in ionomer at operating T [mol/(m3·atm)]."""
         return self._H_O2
@@ -156,4 +181,10 @@ class Params:
         print(f"  D_O2_cl_gas_eff  = {self.D_O2_cl_gas_eff:.3e} m2/s")
         print(f"  K_eq_gas_ion     = {self.K_eq_gas_ion:.4f}  (c_ion/c_gas)")
         print(f"  c_O2_gas_inlet   = {self.c_O2_gas_inlet:.4f} mol/m3")
+        print(f"  --- Stage 4 interphase transfer ---")
+        print(f"  k_MT_GL          = {self.k_MT_GL:.3e} m/s")
+        print(f"  a_GL             = {self.a_GL:.3e} 1/m")
+        print(f"  k_v              = {self.k_v:.3e} 1/s  (= k_MT_GL * a_GL)")
+        print(f"  c_tot            = {self.c_tot:.4f} mol/m3 (x_O2_inlet = "
+              f"{self.c_O2_gas_inlet/self.c_tot:.4f})")
         print("=" * 55)
