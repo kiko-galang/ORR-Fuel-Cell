@@ -311,11 +311,7 @@ def plot_flux_profiles(
     """
     Two-panel figure of face-centred fluxes along the CL at sampled voltages.
 
-<<<<<<< Updated upstream
     Left  : O2 diffusion flux J_O2(x) [μmol m-2 s-1] — enters at the GDL face
-=======
-    Left  : O2 diffusion flux J_O2(x) [mol m-2 s-1] — enters at the GDL face
->>>>>>> Stashed changes
             (x=0) and reaches zero at the no-flux membrane face (x=L_CL).
     Right : Solid i_s(x) and ionic i_L(x) current densities [mA cm-2].
             i_s falls from i_total at x=0 to zero at x=L_CL; i_L rises
@@ -336,7 +332,7 @@ def plot_flux_profiles(
     cidx   = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
     colors = [warm_sequential[i] for i in cidx]
 
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 3.5), ticklabel_size=8)
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=8)
     ax_J, ax_i = axes[0], axes[1]
 
     for V_t, col in zip(V_sample, colors):
@@ -480,7 +476,7 @@ def plot_stage4_o2_profiles(
     cidx    = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
     colors  = [warm_sequential[i] for i in cidx]
 
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 3.0), ticklabel_size=8)
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=8)
     ax_gas, ax_ion = axes[0], axes[1]
 
     lowest = None
@@ -531,6 +527,7 @@ def plot_stage4_o2_profiles(
             Line2D([0], [0], color="gray", ls=":", lw=1.2, label="equil. $K_{eq}c_{gas}$"),
         ],
         fontsize=5.5, frameon=False, loc="center right",
+        bbox_to_anchor=(0.88, 0.5),
     )
 
     fig.tight_layout()
