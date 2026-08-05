@@ -192,7 +192,7 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
                    for u in sols3])
 
     # Two panels at the same width used by every other figure in the chapter
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 3.5), ticklabel_size=8)
+    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=8)
 
     # ── Panel 1: polarization overlay ────────────────────────────────────────
     axes[0].plot(J1, vs1, marker="o", ms=3, lw=1.5, color=rainbow_2[1],
@@ -223,7 +223,7 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
                  label=f"S1 V={vs1[-1]:.3f}")
     axes[1].set_xlabel("$x$  (μm)", fontsize=8)
     axes[1].set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=8)
-    axes[1].set_title("Ionomer O$_2$ profiles (Stage 3 vs Stage 1)", fontsize=9)
+    axes[1].set_title("Ionomer O$_2$ profiles: Stage 1 vs Stage 3", fontsize=9)
     axes[1].legend(fontsize=6, frameon=False)
 
     fig.tight_layout()
