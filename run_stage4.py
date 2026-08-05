@@ -190,12 +190,15 @@ def main():
     print("\n  Generating Stage 4 plots ...")
     from plot_results import (
         plot_stage4_polarization, plot_stage4_o2_profiles, plot_kv_sweep,
+        plot_voltage_breakdown_s4,
     )
     plot_stage4_polarization(vs1, sols1, mesh_cl, vs3, sols3,
                              vs4, sols4, mesh_gdl, p,
                              save_path="stage4_polarization.png")
     plot_stage4_o2_profiles(vs4, sols4, mesh_gdl, mesh_cl, p,
                             save_path="stage4_o2_profiles.png")
+    plot_voltage_breakdown_s4(vs4, sols4, mesh_gdl, mesh_cl, p,
+                              save_path="stage4_voltage_breakdown.png")
 
     kv_list, Jlim = _kv_sweep(p, mesh_gdl, mesh_cl, sols4[-1], vs4[-1])
     J3_lim = float(np.max(np.abs(J3))) * 1e-1   # mA/cm2

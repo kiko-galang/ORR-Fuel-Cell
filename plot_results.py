@@ -356,12 +356,12 @@ def plot_flux_profiles(
         ax_i.plot(xf_um, i_s  * conv, color=col, ls="-")
         ax_i.plot(xf_um, i_L  * conv, color=col, ls="--")
 
-    ax_J.set_xlabel("$x$  (μm)", fontsize=_LABELSIZE)
-    ax_J.set_ylabel("$J_{O_2}$  (μmol m$^{-2}$ s$^{-1}$)", fontsize=_LABELSIZE)
+    ax_J.set_xlabel("$x$  ($\\mu$m)", fontsize=_LABELSIZE)
+    ax_J.set_ylabel("$J_{O_2}$  ($\\mu$mol m$^{-2}$ s$^{-1}$)", fontsize=_LABELSIZE)
     ax_J.set_title("O$_2$ diffusion flux", fontsize=9)
     ax_J.legend(fontsize=6, frameon=False)
 
-    ax_i.set_xlabel("$x$  (μm)", fontsize=_LABELSIZE)
+    ax_i.set_xlabel("$x$  ($\\mu$m)", fontsize=_LABELSIZE)
     ax_i.set_ylabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
     ax_i.set_title("Solid (—) and ionic (– –) current sharing", fontsize=9)
     from matplotlib.lines import Line2D

@@ -35,6 +35,7 @@ from plot_results import (
     plot_profiles,
     plot_ir_breakdown,
     plot_consistency_check,
+    plot_flux_profiles,
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -106,6 +107,8 @@ def main():
                       save_path="stage1_ir_breakdown.png")
     plot_consistency_check(voltages, solutions, mesh, p,
                            save_path="stage1_consistency.png")
+    plot_flux_profiles(voltages, solutions, mesh, p,
+                       save_path="stage1_flux_profiles.png")
 
     print("\n  Stage 1 complete.")
     print("  >> Review all plots before proceeding to Stage 2.")

@@ -221,7 +221,7 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
     ln1, _, _ = unpack(u1_hc, NC)
     axes[1].plot(xc_um, np.exp(ln1), lw=1.2, ls="--", color=rainbow_2[1],
                  label=f"S1 V={vs1[-1]:.3f}")
-    axes[1].set_xlabel("$x$  (μm)", fontsize=8)
+    axes[1].set_xlabel("$x$  ($\\mu$m)", fontsize=8)
     axes[1].set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=8)
     axes[1].set_title("Ionomer O$_2$ profiles: Stage 1 vs Stage 3", fontsize=9)
     axes[1].legend(fontsize=6, frameon=False)

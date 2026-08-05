@@ -29,6 +29,46 @@ The AEM model is independent:
 python "IEM Model\aem_model.py"
 ```
 
+## Reproducing the chapter figures
+
+`make_all_figures.py` is the single entry point. It runs every figure-producing
+script in dependency order, verifies each expected file appeared, and fails if
+matplotlib reports a missing glyph:
+
+```powershell
+python make_all_figures.py            # use existing caches (fast)
+python make_all_figures.py --fresh    # delete caches and re-solve from scratch
+```
+
+Figure ownership — every tracked image must have a producer here, or it silently
+rots when the plotting code changes:
+
+| Script | Figures |
+|--------|---------|
+| `run_stage1.py` | `stage1_polarization`, `stage1_profiles`, `stage1_ir_breakdown`, `stage1_consistency`, `stage1_flux_profiles` |
+| `run_stage2.py` | `stage2_comparison` |
+| `run_stage3.py` | `stage3_results` |
+| `run_stage4.py` | `stage4_polarization`, `stage4_o2_profiles`, `stage4_voltage_breakdown`, `stage4_kv_sweep` |
+| `plot_meshes.py` | `mesh_1d`, `mesh_2d_tri`, `mesh_3d`, `mesh_combined` (`.png` + `.svg` each) |
+| `gen_profiles_curved.py` | `stage1_profiles_curved` |
+
+Two tracked images are deliberately **not** reproducible — they are manual
+artifacts, so don't try to regenerate them: `stage4_o2_profiles.svg` (vector
+export) and `stage4_o2_profiles_edited.png` (hand-edited from it).
+
+### Figure gotchas
+
+- **Write the micron as mathtext `$\mu$`, never a literal `μ`.** The chapter font
+  (Lato, installed via `mpl_fontkit` in `customplot.py`) has no U+03BC, so a bare
+  `μ` renders as a hollow box. Matplotlib only warns on stderr, so a broken label
+  is easy to commit — this is what `make_all_figures.py` guards against.
+- All figures inherit `gengrid`'s `dpi_fig=600`; no `savefig` call overrides it.
+  Don't pass an explicit `dpi=`, or that figure will be inconsistent with the rest.
+- Pin matplotlib (see `requirements.txt`). SVG output embeds a timestamp,
+  randomised clip-path ids and the matplotlib version, and minor releases shift
+  tight-layout by a pixel or two, so a version change dirties committed figures
+  without changing any curve.
+
 ## Architecture
 
 ### Staged model progression

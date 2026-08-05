@@ -1,0 +1,14 @@
+# Versions the committed figures were last regenerated and verified against.
+#
+# matplotlib in particular affects the committed images: SVG output embeds a
+# timestamp, randomised clip-path ids and a matplotlib version string, and
+# minor releases shift tight-layout metrics by a pixel or two.  Curve geometry
+# is unaffected, but figures re-saved on a different version will show up as
+# modified in git even when nothing about the physics changed.
+#
+# The Lato font is also required for text to render as in the chapter; without
+# it matplotlib falls back to DejaVu Sans and every label changes shape.
+numpy==1.26.4
+scipy==1.15.1
+matplotlib==3.10.8
+pillow                # only needed to compare regenerated figures against git
