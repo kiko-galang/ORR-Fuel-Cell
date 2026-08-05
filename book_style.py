@@ -224,6 +224,12 @@ def savefig_book(fig, path: str) -> None:
     (Section 10: "Remove unnecessary external white space WITHOUT changing
     the required figure canvas dimensions"). Call fig.tight_layout() before
     this to fit labels inside the fixed canvas instead.
+
+    Also saves a sibling PDF (same basename) -- Section 10's preferred
+    delivery format for plots/diagrams/line art, vector so it is resolution
+    independent regardless of the 600 dpi PNG raster preview.
     """
     fig.savefig(path)
-    print(f"  Saved: {path}")
+    pdf_path = str(path).rsplit(".", 1)[0] + ".pdf"
+    fig.savefig(pdf_path)
+    print(f"  Saved: {path}  +  {pdf_path}")

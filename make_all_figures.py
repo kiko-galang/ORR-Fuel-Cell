@@ -36,30 +36,41 @@ _GLYPH_MARKERS = re.compile(
     r"missing from font|does not have a glyph|substituting with a dummy symbol"
 )
 
+def _with_pdf(pngs: list[str]) -> list[str]:
+    """Every book_style savefig_book()/plot_meshes._save() call emits a PDF
+    sibling alongside its PNG (Section 10's preferred delivery format)."""
+    out = []
+    for f in pngs:
+        out.append(f)
+        if f.endswith(".png"):
+            out.append(f[:-4] + ".pdf")
+    return out
+
+
 # (script, figures it writes) — in required run order.
 TARGETS: list[tuple[str, list[str]]] = [
-    ("run_stage1.py", [
+    ("run_stage1.py", _with_pdf([
         "stage1_polarization.png",
         "stage1_profiles.png",
         "stage1_ir_breakdown.png",
         "stage1_consistency.png",
         "stage1_flux_profiles.png",
-    ]),
-    ("run_stage2.py", ["stage2_comparison.png"]),
-    ("run_stage3.py", ["stage3_results.png"]),
-    ("run_stage4.py", [
+    ])),
+    ("run_stage2.py", _with_pdf(["stage2_comparison.png"])),
+    ("run_stage3.py", _with_pdf(["stage3_results.png"])),
+    ("run_stage4.py", _with_pdf([
         "stage4_polarization.png",
         "stage4_o2_profiles.png",
         "stage4_voltage_breakdown.png",
         "stage4_kv_sweep.png",
-    ]),
-    ("plot_meshes.py", [
+    ])),
+    ("plot_meshes.py", _with_pdf([
         "mesh_1d.png", "mesh_1d.svg",
         "mesh_2d_tri.png", "mesh_2d_tri.svg",
         "mesh_3d.png", "mesh_3d.svg",
         "mesh_combined.png", "mesh_combined.svg",
-    ]),
-    ("gen_profiles_curved.py", ["stage1_profiles_curved.png"]),
+    ])),
+    ("gen_profiles_curved.py", _with_pdf(["stage1_profiles_curved.png"])),
 ]
 
 CACHES = ["stage1_cache.npz", "stage2_cache.npz",

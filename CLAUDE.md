@@ -41,7 +41,9 @@ python make_all_figures.py --fresh    # delete caches and re-solve from scratch
 ```
 
 Figure ownership — every tracked image must have a producer here, or it silently
-rots when the plotting code changes:
+rots when the plotting code changes. Every entry is a `.png` + `.pdf` pair
+(`savefig_book()` / `plot_meshes._save()` emit both from one call); the mesh
+figures also get a `.svg`:
 
 | Script | Figures |
 |--------|---------|
@@ -49,7 +51,7 @@ rots when the plotting code changes:
 | `run_stage2.py` | `stage2_comparison` |
 | `run_stage3.py` | `stage3_results` |
 | `run_stage4.py` | `stage4_polarization`, `stage4_o2_profiles`, `stage4_voltage_breakdown`, `stage4_kv_sweep` |
-| `plot_meshes.py` | `mesh_1d`, `mesh_2d_tri`, `mesh_3d`, `mesh_combined` (`.png` + `.svg` each) |
+| `plot_meshes.py` | `mesh_1d`, `mesh_2d_tri`, `mesh_3d`, `mesh_combined` (`.png` + `.svg` + `.pdf` each) |
 | `gen_profiles_curved.py` | `stage1_profiles_curved` |
 
 Two tracked images are deliberately **not** reproducible — they are manual
@@ -66,8 +68,9 @@ DejaVu Sans if Arial is unavailable), fixed mm figure canvases (`FIGSIZE_SMALL`
 `FIGSIZE_LARGE_SQUARE` 180x180mm for the 2x2 profile grids), a 4-color discrete
 palette (`COLOR_CYCLE` = black/blue/green/red — `#000000`/`#06739C`/`#00991A`/
 `#B30000`) plus `viridis` for genuinely continuous data, and `(a)`/`(b)` panel
-labels via `add_panel_labels()`. 600 dpi PNG is used throughout as the guide's
-explicitly sanctioned raster fallback to vector PDF.
+labels via `add_panel_labels()`. Every figure saves both a 600 dpi PNG (quick
+preview, and what git diffs render) and a vector PDF (Section 10's preferred
+submission format).
 
 **Chapter-wide color convention** — kept consistent across every figure so a
 color means the same thing everywhere: for a family of ≤4 sampled voltages

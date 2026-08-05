@@ -66,11 +66,14 @@ CHANNEL_DK = "0.35"
 # ── Small helpers ─────────────────────────────────────────────────────────────
 
 def _save(fig, png_path):
-    """Save both a PNG (preview) and an SVG (vector, editable) of the figure."""
+    """Save a PNG (preview), an SVG (vector, editable), and a PDF (Section 10's
+    preferred delivery format) of the figure."""
     svg_path = png_path.rsplit(".", 1)[0] + ".svg"
+    pdf_path = png_path.rsplit(".", 1)[0] + ".pdf"
     fig.savefig(png_path, bbox_inches="tight")
     fig.savefig(svg_path, bbox_inches="tight")
-    print(f"  Saved: {png_path}  +  {svg_path}")
+    fig.savefig(pdf_path, bbox_inches="tight")
+    print(f"  Saved: {png_path}  +  {svg_path}  +  {pdf_path}")
 
 
 def _tint(color, f):
