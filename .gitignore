@@ -4,3 +4,10 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Local working docs (not part of the reproducible chapter/figure pipeline)
+/Chapter_Restructure_Outline.md
+/Figure_Preparation_Guide.pdf
+/Owejan_2013_J._Electrochem._Soc._160_F824.pdf
+/Python_for_Multiphysics_Outline_Claude-tracked-edits.docx
+/Voice_CheatSheet.md
