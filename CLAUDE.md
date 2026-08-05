@@ -56,14 +56,60 @@ Two tracked images are deliberately **not** reproducible — they are manual
 artifacts, so don't try to regenerate them: `stage4_o2_profiles.svg` (vector
 export) and `stage4_o2_profiles_edited.png` (hand-edited from it).
 
+### Book house style (`book_style.py`)
+
+All chapter figures follow `Figure_Preparation_Guide.pdf` (the Wiley book house
+style), implemented in `book_style.py` and imported by every figure-producing
+script: Arial typography (`font.sans-serif` falls back to Liberation Sans /
+DejaVu Sans if Arial is unavailable), fixed mm figure canvases (`FIGSIZE_SMALL`
+80x60mm for single-panel plots, `FIGSIZE_LARGE` 180x108mm for 2-panel figures,
+`FIGSIZE_LARGE_SQUARE` 180x180mm for the 2x2 profile grids), a 4-color discrete
+palette (`COLOR_CYCLE` = black/blue/green/red — `#000000`/`#06739C`/`#00991A`/
+`#B30000`) plus `viridis` for genuinely continuous data, and `(a)`/`(b)` panel
+labels via `add_panel_labels()`. 600 dpi PNG is used throughout as the guide's
+explicitly sanctioned raster fallback to vector PDF.
+
+**Chapter-wide color convention** — kept consistent across every figure so a
+color means the same thing everywhere: for a family of ≤4 sampled voltages
+(profiles, flux profiles, O2 profiles), index 0 (near-OCV) → black through
+index 3 (highest overpotential) → red, via `_voltage_samples()` /
+`COLOR_CYCLE[:n]` in `plot_results.py`. In voltage-loss breakdowns: kinetic =
+black, ohmic-ionic = blue, ohmic-solid = green, mass-transport = red (the loss
+each stage's model exists to expose). A >4-series stack (Stage 4's breakdown
+splits mass-transport into film + gas) reuses a color with a hatch pattern
+(Section 6: combine the 4 colors with marker/linestyle/hatch) rather than
+adding a 5th color.
+
+**`plot_meshes.py` is a deliberate partial exception.** Its 3D isometric mesh
+and MEA/serpentine-flow-field illustrations are schematic diagrams, not
+"discrete datasets" (Figure_Preparation_Guide.pdf Section 5.1) — literally
+applying Section 2's anti-3D/anti-gradient rule to them would mean discarding
+the 3D views these figures exist to show. Only fonts, panel-label typography,
+and title sizing were updated there; the illustrative sequential palettes
+(`cool_sequential`/`warm_sequential` from `customplot.py`) and the isometric
+shading/tinting are unchanged by design — don't "fix" this without re-checking
+that tradeoff.
+
 ### Figure gotchas
 
-- **Write the micron as mathtext `$\mu$`, never a literal `μ`.** The chapter font
-  (Lato, installed via `mpl_fontkit` in `customplot.py`) has no U+03BC, so a bare
-  `μ` renders as a hollow box. Matplotlib only warns on stderr, so a broken label
-  is easy to commit — this is what `make_all_figures.py` guards against.
-- All figures inherit `gengrid`'s `dpi_fig=600`; no `savefig` call overrides it.
-  Don't pass an explicit `dpi=`, or that figure will be inconsistent with the rest.
+- **Write the micron as mathtext `$\mu$`, never a literal `μ`.** Arial has no
+  U+03BC glyph, so a bare `μ` renders as a hollow box (or, on some matplotlib
+  versions, logs "does not have a glyph ... dummy symbol" instead of "missing
+  from font" — `make_all_figures.py` matches both phrasings). Matplotlib only
+  warns on stderr, so a broken label is easy to commit unnoticed.
+- Every figure gets its canvas size from `book_style.FIGSIZE_*`; don't pass an
+  explicit `dpi=` or `figsize=` elsewhere, or that figure will be inconsistent
+  with the rest.
+- `savefig_book()` deliberately does **not** pass `bbox_inches="tight"` — the
+  guide requires the mm canvas size be preserved exactly (Section 10: trim
+  whitespace "WITHOUT changing the required figure canvas dimensions"), and
+  `bbox_inches="tight"` crops the export away from that fixed size. Call
+  `fig.tight_layout()` before saving to fit labels inside the fixed canvas
+  instead of relying on autocrop.
+- Panel labels are placed just above each panel's axes (not literally inside
+  at the guide's example coordinates), specifically so they can never collide
+  with an in-panel legend anchored to the same "upper left" corner — a real
+  collision hit during development of the stacked voltage-breakdown figures.
 - Pin matplotlib (see `requirements.txt`). SVG output embeds a timestamp,
   randomised clip-path ids and the matplotlib version, and minor releases shift
   tight-layout by a pixel or two, so a version change dirties committed figures

@@ -6,9 +6,23 @@
 # is unaffected, but figures re-saved on a different version will show up as
 # modified in git even when nothing about the physics changed.
 #
-# The Lato font is also required for text to render as in the chapter; without
-# it matplotlib falls back to DejaVu Sans and every label changes shape.
+# Arial is required for text to render per Figure_Preparation_Guide.pdf
+# (book_style.py); without it, matplotlib falls back to Liberation Sans or
+# DejaVu Sans (font.sans-serif fallback chain) and every label changes shape.
 numpy==1.26.4
 scipy==1.15.1
 matplotlib==3.10.8
 pillow                # only needed to compare regenerated figures against git
+
+# customplot.py is still imported by plot_meshes.py for its two illustrative
+# sequential palettes (region colors in the schematic diagrams -- exempted
+# from the book's 4-color discrete-dataset rule, see Figure_Preparation_Guide.pdf
+# Section 5.1 -- book_style.py's Arial/rcParams import afterward still wins).
+pandas
+openpyxl              # customplot.py reads "Color Swatches from UC Berkeley.xlsx"
+seaborn
+sympy
+mpl_fontkit
+
+# gen_profiles_curved.py: voltage labels that follow each curve
+curved-text

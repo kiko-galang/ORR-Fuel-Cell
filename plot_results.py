@@ -4,20 +4,30 @@ Plotting routines for Stage 1 ORR PEMFC CL model results.
 Follows the PEMFC convention (§15.5):
     y-axis : V_cathode [V vs SHE], increasing upward
     x-axis : current density [A/cm2], increasing rightward
+
+Styled to the book Figure_Preparation_Guide.pdf: fixed mm figure canvases,
+Arial typography, and the 4-color discrete palette (black/blue/green/red)
+combined with marker/linestyle when a panel needs more than 4 series.
 """
 from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from assembly_stage1 import unpack, compute_current, current_from_flux
 from kinetics import R_ORR
 from transport import diffusion_face_fluxes, ohmic_face_fluxes
 
-# Project-standard plotting: gengrid styling + UC Berkeley color palettes.
-# (customplot sets the SVG backend, Lato font, and consistent tick styling.)
-from customplot import gengrid, rainbow_2, warm_sequential
+from book_style import (
+    FIGSIZE_SMALL, FIGSIZE_LARGE, FIGSIZE_LARGE_SQUARE,
+    BOOK_COLORS, COLOR_CYCLE, LINESTYLES,
+    add_panel_labels, savefig_book,
+)
 
-# Axis-label font size (gengrid controls tick-label size separately).
-_LABELSIZE = 8
+BLACK, BLUE, GREEN, RED = (BOOK_COLORS[k] for k in ("black", "blue", "green", "red"))
+
+# Shared axis-label text ("Quantity / Unit", per Section 4).
+_CURRENT_LBL  = "Current density / mA cm$^{-2}$"
+_POSITION_UM  = "$x$ / $\\mu$m"
 
 
 def _currents_mA_cm2(voltages, solutions, mesh, p) -> np.ndarray:
@@ -26,6 +36,27 @@ def _currents_mA_cm2(voltages, solutions, mesh, p) -> np.ndarray:
         compute_current(u, mesh, p) * 1e-4 * 1e3   # A/m2 -> mA/cm2
         for u in solutions
     ])
+
+
+def _voltage_samples(voltages, V_sample=None, n=4):
+    """Pick n representative voltages and return (indices, colors, labels).
+
+    n must be <= 4: each sampled voltage is a discrete, individually-labeled
+    condition (not a dense continuous sweep), so it maps onto the four
+    approved colors (Section 5.1) rather than a viridis continuum. The
+    mapping is fixed chapter-wide: index 0 (near-OCV) -> black, ... ,
+    index -1 (highest overpotential) -> red.
+    """
+    assert n <= 4, "only 4 approved discrete colors are available"
+    if V_sample is None:
+        m = len(voltages)
+        idx_frac = np.linspace(0, m - 1, n).round().astype(int)
+        V_sample = [voltages[i] for i in idx_frac]
+    V_arr = np.asarray(voltages)
+    idx = [int(np.argmin(np.abs(V_arr - V_t))) for V_t in V_sample]
+    colors = COLOR_CYCLE[:n]
+    labels = [f"$V$ = {voltages[i]:.3f} V" for i in idx]
+    return idx, colors, labels
 
 
 # ── 1. Polarization curve ─────────────────────────────────────────────────────
@@ -44,20 +75,19 @@ def plot_polarization(
     V = np.asarray(voltages)
 
     if ax is None:
-        fig, ax, _ = gengrid(1, 1, size_inches=(3.25, 2.5))
+        fig, ax = plt.subplots(figsize=FIGSIZE_SMALL)
     else:
         fig = ax.figure
 
-    ax.plot(J, V, marker="o", ms=3, lw=1.5, color=rainbow_2[1], label=label)
-    ax.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax.set_ylabel("$V_{\\mathrm{cathode}}$  (V vs SHE)", fontsize=_LABELSIZE)
-    ax.set_title("Polarization curve — Stage 1 CL model", fontsize=9)
-    ax.legend(fontsize=7, frameon=False)
+    ax.plot(J, V, marker="o", color=BLACK, label=label)
+    ax.set_xlabel(_CURRENT_LBL)
+    ax.set_ylabel("$V_{\\mathrm{cathode}}$ / V vs. SHE")
+    ax.set_title("Stage 1 polarization curve")
+    ax.legend()
 
     if save_path:
         fig.tight_layout()
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
 
     return ax
 
@@ -76,33 +106,17 @@ def plot_profiles(
     4-panel figure: c_O2, phi_L, phi_s, and eta = (phi_s − phi_L) − U_eq
     as functions of position x for a set of sampled voltages.
     """
-    from assembly_stage1 import unpack
-
-    if V_sample is None:
-        n  = len(voltages)
-        V_sample = [voltages[0],
-                    voltages[n // 3],
-                    voltages[2 * n // 3],
-                    voltages[-1]]
-
-    V_arr = np.asarray(voltages)
+    idx_samples, colors, labels = _voltage_samples(voltages, V_sample, n=4)
     xc_um = mesh.xc * 1e6   # m -> um
-
-    # Sequential warm ramp: pale (low overpotential) -> dark (high overpotential)
-    cidx   = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
-    colors = [warm_sequential[i] for i in cidx]
     N = mesh.N
 
-    fig, axes, _ = gengrid(2, 2, size_inches=(6.5, 6.25), ticklabel_size=7)
+    fig, axes = plt.subplots(2, 2, figsize=FIGSIZE_LARGE_SQUARE)
     ax_c, ax_phiL, ax_phiS, ax_eta = (
         axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
     )
 
-    for V_t, col in zip(V_sample, colors):
-        idx = int(np.argmin(np.abs(V_arr - V_t)))
-        u   = solutions[idx]
-        lbl = f"V = {voltages[idx]:.3f} V"
-
+    for idx, col, lbl in zip(idx_samples, colors, labels):
+        u = solutions[idx]
         ln_cO2, phi_L, phi_s = unpack(u, N)
         c_O2  = np.exp(ln_cO2)
         U_eq  = p.U_ORR_eq(c_O2)
@@ -113,25 +127,25 @@ def plot_profiles(
         ax_phiS.plot(xc_um, phi_s,  color=col, label=lbl)
         ax_eta.plot (xc_um, eta * 1e3, color=col, label=lbl)      # V -> mV
 
-    ax_c.set_ylabel("$c_{O_2}$  (mol m$^{-3}$)", fontsize=_LABELSIZE)
-    ax_phiL.set_ylabel("$\\phi_L$  (mV)", fontsize=_LABELSIZE)
-    ax_phiS.set_ylabel("$\\phi_s$  (V vs SHE)", fontsize=_LABELSIZE)
-    ax_eta.set_ylabel("$\\eta = (\\phi_s - \\phi_L) - U_{eq}$  (mV)", fontsize=_LABELSIZE)
+    ax_c.set_ylabel("$c_{O_2}$ / mol m$^{-3}$")
+    ax_phiL.set_ylabel("$\\phi_L$ / mV")
+    ax_phiS.set_ylabel("$\\phi_s$ / V vs. SHE")
+    ax_eta.set_ylabel("$\\eta = (\\phi_s - \\phi_L) - U_{eq}$ / mV")
 
     for ax in axes.flat:
-        ax.set_xlabel("$x$  (um)", fontsize=_LABELSIZE)
-        ax.legend(fontsize=6, frameon=False)
+        ax.set_xlabel(_POSITION_UM)
+        ax.legend()
 
     # c_O2 curves decay from the left, leaving an empty band on the centre-right;
     # use 2 columns so the legend is short (2 rows) and stays clear of the curves
-    ax_c.legend(fontsize=6, frameon=False, loc="center right", ncol=2,
+    ax_c.legend(loc="center right", ncol=2,
                 columnspacing=1.0, handletextpad=0.4, bbox_to_anchor=(0.99, 0.72))
 
+    add_panel_labels(axes)
     fig.tight_layout()
 
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
 
     plt.close(fig)
 
@@ -155,10 +169,9 @@ def plot_ir_breakdown(
       mass-transp. : integral i_ORR (RT/alpha_c F) ln(c_bc/c_O2) dx / I_cell (Eq. 23)
       kinetic      : (U_OCV - V) - (ohmic + mass-transport)          (activation)
 
-    The four contributions sum EXACTLY to U_OCV - V.  Unlike the previous
-    version (which used boundary potential drops for ohmic and lumped the
-    O2-transport loss into 'kinetic'), this exposes the ionomer-phase O2
-    mass-transport loss — the loss Stage 1 actually models.
+    The four contributions sum EXACTLY to U_OCV - V.  Colors follow a
+    chapter-wide convention: kinetic=black, mass-transport=red (the loss
+    this stage's model exists to expose), ohmic-ionic=blue, ohmic-solid=green.
     """
     from transport import ohmic_face_fluxes
 
@@ -191,20 +204,19 @@ def plot_ir_breakdown(
               for v in (kin, mt, ohm_i, ohm_s)]
     labels = ["Kinetic (activation)", "Mass transp. (ionomer O$_2$)",
               "Ohmic (ionic)", "Ohmic (solid)"]
-    colors = [rainbow_2[1], rainbow_2[3], rainbow_2[0], rainbow_2[2]]
+    colors = [BLACK, RED, BLUE, GREEN]
     tot = np.asarray(tot) * 1e3
 
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=7)
-    ax1, ax2 = axes[0], axes[1]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
     # ── Left: full stacked breakdown (sums exactly to U_OCV - V) ─────────────
     ax1.stackplot(J, *stacks, labels=labels, colors=colors, alpha=0.9)
-    ax1.plot(J, tot, color="k", lw=1.0, ls="--", label="$U_{OCV}-V$")
-    ax1.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax1.set_ylabel("Voltage loss  (mV)", fontsize=_LABELSIZE)
-    ax1.set_title("Stage 1 applied-voltage breakdown (power-loss)", fontsize=9)
+    ax1.plot(J, tot, color=BLACK, lw=1.0, ls="--", label="$U_{OCV}-V$")
+    ax1.set_xlabel(_CURRENT_LBL)
+    ax1.set_ylabel("Voltage loss / mV")
+    ax1.set_title("Stage 1 applied-voltage breakdown")
     ax1.set_ylim(0, float(tot.max()) * 1.5)       # headroom for the legend
-    ax1.legend(loc="upper left", fontsize=5.5, frameon=False, ncol=2)
+    ax1.legend(loc="upper left", ncol=2)
 
     idx = int(np.argmax(J))
     parts = [s[idx] for s in stacks]
@@ -212,26 +224,25 @@ def plot_ir_breakdown(
     ax1.text(0.97, 0.05,
              f"At $J_{{max}}$: kin {100*parts[0]/tt:.0f}%  "
              f"mt {100*parts[1]/tt:.0f}%  ohm {100*(parts[2]+parts[3])/tt:.2f}%",
-             transform=ax1.transAxes, ha="right", va="bottom", fontsize=5.5,
-             family="monospace",
+             transform=ax1.transAxes, ha="right", va="bottom", fontsize=6,
              bbox=dict(boxstyle="round,pad=0.25", fc="white", alpha=0.85))
 
     # ── Right: each non-kinetic loss INDIVIDUALLY (not stacked), expanded ─────
     for s, c, lbl in [
-        (stacks[1], rainbow_2[3], "Mass transp. (ionomer O$_2$)"),
-        (stacks[2], rainbow_2[0], "Ohmic (ionic)"),
-        (stacks[3], rainbow_2[2], "Ohmic (solid)"),
+        (stacks[1], RED,  "Mass transp. (ionomer O$_2$)"),
+        (stacks[2], BLUE, "Ohmic (ionic)"),
+        (stacks[3], GREEN, "Ohmic (solid)"),
     ]:
-        ax2.plot(J, s, color=c, lw=1.6, label=lbl)
-    ax2.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax2.set_ylabel("Loss  (mV) — expanded", fontsize=_LABELSIZE)
-    ax2.set_title("Non-kinetic losses (each from zero)", fontsize=9)
-    ax2.legend(fontsize=5.5, frameon=False, loc="upper left")
+        ax2.plot(J, s, color=c, label=lbl)
+    ax2.set_xlabel(_CURRENT_LBL)
+    ax2.set_ylabel("Loss / mV")
+    ax2.set_title("Non-kinetic losses")
+    ax2.legend(loc="upper left")
 
+    add_panel_labels((ax1, ax2))
+    fig.tight_layout()
     if save_path:
-        fig.tight_layout()
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
 
     plt.close(fig)
 
@@ -264,31 +275,30 @@ def plot_consistency_check(
     solid = np.array(solid) * 1e-4 * 1e3
     ionic = np.array(ionic) * 1e-4 * 1e3
 
-    fig, axes, _ = gengrid(1, 2, size_inches=(6.5, 3.0), ticklabel_size=7)
-    ax1, ax2 = axes[0], axes[1]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
-    ax1.plot(V, integ, color=rainbow_2[1], ls="-",  label="∫ i_ORR dx")
-    ax1.plot(V, solid, color=rainbow_2[4], ls="--", label="i_s(x=0)")
-    ax1.plot(V, ionic, color=rainbow_2[0], ls=":",  label="i_L(x=L_CL)")
-    ax1.set_xlabel("$V_{\\mathrm{cathode}}$ (V vs SHE)", fontsize=_LABELSIZE)
-    ax1.set_ylabel("Current density (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax1.legend(fontsize=7, frameon=False)
-    ax1.set_title("Three-way current consistency", fontsize=9)
+    ax1.plot(V, integ, color=BLACK, ls="-",  label="$\\int i_{ORR}\\,dx$")
+    ax1.plot(V, solid, color=BLUE,  ls="--", label="$i_s(x=0)$")
+    ax1.plot(V, ionic, color=GREEN, ls=":",  label="$i_L(x=L_{CL})$")
+    ax1.set_xlabel("$V_{\\mathrm{cathode}}$ / V vs. SHE")
+    ax1.set_ylabel(_CURRENT_LBL)
+    ax1.legend()
+    ax1.set_title("Three-way current consistency")
 
     err_solid = 100.0 * np.abs((solid - integ) / (np.abs(integ) + 1e-10))
     err_ionic = 100.0 * np.abs((ionic - integ) / (np.abs(integ) + 1e-10))
-    ax2.semilogy(V, err_solid, color=rainbow_2[4], ls="--", label="|i_s − ∫| / |∫|")
-    ax2.semilogy(V, err_ionic, color=rainbow_2[0], ls=":",  label="|i_L − ∫| / |∫|")
-    ax2.axhline(0.1, color="k", lw=0.8, ls=":", label="0.1 % threshold")
-    ax2.set_xlabel("$V_{\\mathrm{cathode}}$ (V vs SHE)", fontsize=_LABELSIZE)
-    ax2.set_ylabel("Relative error (%)", fontsize=_LABELSIZE)
-    ax2.legend(fontsize=7, frameon=False)
-    ax2.set_title("Relative error between three methods", fontsize=9)
+    ax2.semilogy(V, err_solid, color=BLUE,  ls="--", label="$|i_s - \\int| / |\\int|$")
+    ax2.semilogy(V, err_ionic, color=GREEN, ls=":",  label="$|i_L - \\int| / |\\int|$")
+    ax2.axhline(0.1, color=RED, lw=0.7, ls=":", label="0.1% threshold")
+    ax2.set_xlabel("$V_{\\mathrm{cathode}}$ / V vs. SHE")
+    ax2.set_ylabel("Relative error / %")
+    ax2.legend()
+    ax2.set_title("Relative error between methods")
 
+    add_panel_labels((ax1, ax2))
     fig.tight_layout()
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
 
     plt.close(fig)
 
@@ -306,35 +316,23 @@ def plot_flux_profiles(
     """
     Two-panel figure of face-centred fluxes along the CL at sampled voltages.
 
-    Left  : O2 diffusion flux J_O2(x) [μmol m-2 s-1] — enters at the GDL face
+    Left  : O2 diffusion flux J_O2(x) [umol m-2 s-1] — enters at the GDL face
             (x=0) and reaches zero at the no-flux membrane face (x=L_CL).
     Right : Solid i_s(x) and ionic i_L(x) current densities [mA cm-2].
             i_s falls from i_total at x=0 to zero at x=L_CL; i_L rises
             from zero to i_total.  Their sum equals i_total everywhere
             (charge conservation).
     """
-    if V_sample is None:
-        n = len(voltages)
-        V_sample = [voltages[0],
-                    voltages[n // 3],
-                    voltages[2 * n // 3],
-                    voltages[-1]]
+    idx_samples, colors, _ = _voltage_samples(voltages, V_sample, n=4)
+    xf_um = mesh.xf * 1e6          # face positions [um]
+    conv  = 1e-4 * 1e3             # A/m2 -> mA/cm2
 
-    V_arr  = np.asarray(voltages)
-    xf_um  = mesh.xf * 1e6          # face positions [μm]
-    conv   = 1e-4 * 1e3             # A/m² → mA/cm²
+    fig, (ax_J, ax_i) = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
-    cidx   = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
-    colors = [warm_sequential[i] for i in cidx]
-
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=8)
-    ax_J, ax_i = axes[0], axes[1]
-
-    for V_t, col in zip(V_sample, colors):
-        idx = int(np.argmin(np.abs(V_arr - V_t)))
+    for idx, col in zip(idx_samples, colors):
         u   = solutions[idx]
         V_c = float(voltages[idx])
-        lbl = f"V = {V_c:.3f} V"
+        lbl = f"$V$ = {V_c:.3f} V"
 
         N = mesh.N
         ln_cO2, phi_L, phi_s = unpack(u, N)
@@ -352,38 +350,31 @@ def plot_flux_profiles(
             bc_left=V_c, bc_right=None,
         )
 
-        ax_J.plot(xf_um, J_O2 * 1e6, color=col, label=lbl)     # → μmol m-2 s-1
+        ax_J.plot(xf_um, J_O2 * 1e6, color=col, label=lbl)     # -> umol m-2 s-1
         ax_i.plot(xf_um, i_s  * conv, color=col, ls="-")
         ax_i.plot(xf_um, i_L  * conv, color=col, ls="--")
 
-    ax_J.set_xlabel("$x$  ($\\mu$m)", fontsize=_LABELSIZE)
-    ax_J.set_ylabel("$J_{O_2}$  ($\\mu$mol m$^{-2}$ s$^{-1}$)", fontsize=_LABELSIZE)
-    ax_J.set_title("O$_2$ diffusion flux", fontsize=9)
-    ax_J.legend(fontsize=6, frameon=False)
+    ax_J.set_xlabel(_POSITION_UM)
+    ax_J.set_ylabel("$J_{O_2}$ / $\\mu$mol m$^{-2}$ s$^{-1}$")
+    ax_J.set_title("O$_2$ diffusion flux")
+    ax_J.legend()
 
-    ax_i.set_xlabel("$x$  ($\\mu$m)", fontsize=_LABELSIZE)
-    ax_i.set_ylabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax_i.set_title("Solid (—) and ionic (– –) current sharing", fontsize=9)
-    from matplotlib.lines import Line2D
+    ax_i.set_xlabel(_POSITION_UM)
+    ax_i.set_ylabel(_CURRENT_LBL)
+    ax_i.set_title("Solid (—) and ionic (– –) current sharing")
     ax_i.legend(
         handles=[
-            Line2D([0], [0], color="gray", ls="-",  lw=1.2, label="solid  $i_s$"),
-            Line2D([0], [0], color="gray", ls="--", lw=1.2, label="ionic  $i_L$"),
+            Line2D([0], [0], color="0.35", ls="-",  label="solid  $i_s$"),
+            Line2D([0], [0], color="0.35", ls="--", label="ionic  $i_L$"),
         ],
-        fontsize=6, frameon=False,
     )
 
+    add_panel_labels((ax_J, ax_i))
     fig.tight_layout()
-    fig.subplots_adjust(left=0.14)   # prevent y-axis label clipping
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
 
     plt.close(fig)
-
-
-# Micron label that renders in the Lato/mathtext font (raw U+03BC has no glyph)
-_UM = "$x$  ($\\mu$m)"
 
 
 # ── 6. Stage 4: polarization overlay (Stage 1 vs 3 vs 4) ──────────────────────
@@ -408,34 +399,29 @@ def plot_stage4_polarization(
     J3 = np.array([compute_current_s3(u, mesh_gdl, mesh_cl, p) * 1e-1 for u in sols3])
     J4 = np.array([compute_current_s4(u, mesh_gdl, mesh_cl, p) * 1e-1 for u in sols4])
 
-    fig, ax, _ = gengrid(1, 1, size_inches=(3.5, 2.9), ticklabel_size=8,
-                         genlabels=False)
-    ax.plot(J1, vs1, marker="o", ms=3, lw=1.5, color=rainbow_2[0],
-            label="Stage 1  (ionomer only)")
-    ax.plot(J3, vs3, marker="s", ms=3, lw=1.5, ls="--", color=rainbow_2[4],
-            label="Stage 3  (gas, local equil.)")
-    ax.plot(J4, vs4, marker="^", ms=3.5, lw=1.6, ls="-", color=rainbow_2[2],
-            label="Stage 4  (finite-rate + M-S)")
+    fig, ax = plt.subplots(figsize=FIGSIZE_SMALL)
+    ax.plot(J1, vs1, marker="o", color=BLACK, label="Stage 1 (ionomer only)")
+    ax.plot(J3, vs3, marker="s", ls="--", color=BLUE, label="Stage 3 (gas, local equil.)")
+    ax.plot(J4, vs4, marker="^", ls="-", color=GREEN, label="Stage 4 (finite-rate + M-S)")
 
     # Annotate the Stage 3 -> Stage 4 limiting-current gap at the lowest voltage.
     V_lo = float(min(np.min(vs3), np.min(vs4)))
     j3_lo = float(J3[int(np.argmin(vs3))])
     j4_lo = float(J4[int(np.argmin(vs4))])
     ax.annotate("", xy=(j3_lo, V_lo), xytext=(j4_lo, V_lo),
-                arrowprops=dict(arrowstyle="<->", color="0.35", lw=0.9))
+                arrowprops=dict(arrowstyle="<->", color=RED, lw=0.9))
     ax.text(0.5 * (j3_lo + j4_lo), V_lo + 0.012,
             f"film loss\n{(j3_lo - j4_lo) / j3_lo * 100:.0f}%",
-            ha="center", va="bottom", fontsize=6, color="0.25")
+            ha="center", va="bottom", fontsize=6, color=RED)
 
-    ax.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax.set_ylabel("$V_{\\mathrm{cathode}}$  (V vs SHE)", fontsize=_LABELSIZE)
-    ax.set_title("Polarization: Stage 1 vs 3 vs 4", fontsize=9)
-    ax.legend(fontsize=6, frameon=False, loc="upper right")
+    ax.set_xlabel(_CURRENT_LBL)
+    ax.set_ylabel("$V_{\\mathrm{cathode}}$ / V vs. SHE")
+    ax.set_title("Polarization: Stage 1 vs 3 vs 4")
+    ax.legend(loc="upper right")
 
     fig.tight_layout()
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
     plt.close(fig)
 
 
@@ -459,24 +445,17 @@ def plot_stage4_o2_profiles(
     from assembly_stage4 import unpack_s4
 
     NG, NC = mesh_gdl.N, mesh_cl.N
-    if V_sample is None:
-        n = len(vs4)
-        V_sample = [vs4[0], vs4[n // 3], vs4[2 * n // 3], vs4[-1]]
+    idx_samples, colors, _ = _voltage_samples(vs4, V_sample, n=4)
 
-    V_arr   = np.asarray(vs4)
-    x_gdl   = mesh_gdl.xc * 1e6                       # 0 .. L_GDL  [um]
-    x_cl    = (p.L_GDL + mesh_cl.xc) * 1e6            # L_GDL .. L_GDL+L_CL [um]
-    xc_cl   = mesh_cl.xc * 1e6                        # CL-local coordinate [um]
-    x_if    = p.L_GDL * 1e6                           # GDL/CL interface [um]
-    cidx    = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
-    colors  = [warm_sequential[i] for i in cidx]
+    x_gdl = mesh_gdl.xc * 1e6                       # 0 .. L_GDL  [um]
+    x_cl  = (p.L_GDL + mesh_cl.xc) * 1e6            # L_GDL .. L_GDL+L_CL [um]
+    xc_cl = mesh_cl.xc * 1e6                        # CL-local coordinate [um]
+    x_if  = p.L_GDL * 1e6                           # GDL/CL interface [um]
 
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=8)
-    ax_gas, ax_ion = axes[0], axes[1]
+    fig, (ax_gas, ax_ion) = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
     lowest = None
-    for V_t, col in zip(V_sample, colors):
-        idx = int(np.argmin(np.abs(V_arr - V_t)))
+    for idx, col in zip(idx_samples, colors):
         u   = sols4[idx]
         lbl = f"$V$ = {vs4[idx]:.3f} V"
         ln_c_gdl, ln_c_gas, ln_c_ion, _, _ = unpack_s4(u, NG, NC)
@@ -488,11 +467,11 @@ def plot_stage4_o2_profiles(
         # Panel a: continuous gas profile across GDL + CL
         ax_gas.plot(np.concatenate([x_gdl, x_cl]),
                     np.concatenate([c_gdl, c_gas]),
-                    color=col, lw=1.5, label=lbl)
+                    color=col, label=lbl)
 
         # Panel b: dissolved (solid) vs equilibrium (dotted)
-        ax_ion.plot(xc_cl, c_ion, color=col, lw=1.6, ls="-")
-        ax_ion.plot(xc_cl, c_eq,  color=col, lw=1.0, ls=":")
+        ax_ion.plot(xc_cl, c_ion, color=col, ls="-")
+        ax_ion.plot(xc_cl, c_eq,  color=col, ls=":")
         lowest = (xc_cl, c_ion, c_eq, col)
 
     # Shade the interphase gap at the highest-current (lowest-V) case
@@ -501,35 +480,32 @@ def plot_stage4_o2_profiles(
         ax_ion.fill_between(xc_cl, c_ion, c_eq, color=col, alpha=0.18,
                             lw=0, label="interphase gap")
 
-    ax_gas.axvline(x_if, color="0.5", lw=0.9, ls="--")
-    ax_gas.axhline(p.c_O2_gas_inlet, color="0.7", lw=0.8, ls=":")
+    ax_gas.axvline(x_if, color="0.5", lw=0.7, ls="--")
+    ax_gas.axhline(p.c_O2_gas_inlet, color="0.7", lw=0.6, ls=":")
     ax_gas.text(x_if - 4, ax_gas.get_ylim()[0], " GDL", ha="right", va="bottom",
                 fontsize=6, color="0.4")
     ax_gas.text(x_if + 4, ax_gas.get_ylim()[0], "CL ", ha="left", va="bottom",
                 fontsize=6, color="0.4")
-    ax_gas.set_xlabel(_UM.replace("$x$", "$x$ from gas channel"), fontsize=_LABELSIZE)
-    ax_gas.set_ylabel("$c_{O_2}$ gas  (mol m$^{-3}$)", fontsize=_LABELSIZE)
-    ax_gas.set_title("Pore-gas O$_2$  (GDL + CL)", fontsize=9)
-    ax_gas.legend(fontsize=5.5, frameon=False, loc="lower left")
+    ax_gas.set_xlabel("$x$ from gas channel / $\\mu$m")
+    ax_gas.set_ylabel("$c_{O_2}$ gas / mol m$^{-3}$")
+    ax_gas.set_title("Pore-gas O$_2$ (GDL + CL)")
+    ax_gas.legend(loc="lower left")
 
-    ax_ion.set_xlabel(_UM.replace("$x$", "$x$ in CL"), fontsize=_LABELSIZE)
-    ax_ion.set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=_LABELSIZE)
-    ax_ion.set_title("Dissolved vs equilibrium $K_{eq}c_{gas}$", fontsize=9)
-    from matplotlib.lines import Line2D
+    ax_ion.set_xlabel("$x$ in CL / $\\mu$m")
+    ax_ion.set_ylabel("$c_{O_2}$ ionomer / mol m$^{-3}$")
+    ax_ion.set_title("Dissolved vs equilibrium $K_{eq}c_{gas}$")
     ax_ion.legend(
         handles=[
-            Line2D([0], [0], color="gray", ls="-", lw=1.6, label="dissolved $c_{ion}$"),
-            Line2D([0], [0], color="gray", ls=":", lw=1.2, label="equil. $K_{eq}c_{gas}$"),
+            Line2D([0], [0], color="0.35", ls="-", label="dissolved $c_{ion}$"),
+            Line2D([0], [0], color="0.35", ls=":", label="equil. $K_{eq}c_{gas}$"),
         ],
-        fontsize=5.5, frameon=False, loc="center right",
-        bbox_to_anchor=(0.88, 0.5),
+        loc="center right", bbox_to_anchor=(0.88, 0.5),
     )
 
+    add_panel_labels((ax_gas, ax_ion))
     fig.tight_layout()
-    fig.subplots_adjust(left=0.10, wspace=0.32)
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
     plt.close(fig)
 
 
@@ -547,34 +523,32 @@ def plot_kv_sweep(
     J  = np.asarray(Jlim, float)
     ok = np.isfinite(J)
 
-    fig, ax, _ = gengrid(1, 1, size_inches=(3.5, 2.9), ticklabel_size=8,
-                         genlabels=False)
+    fig, ax = plt.subplots(figsize=FIGSIZE_SMALL)
 
     # Shade the transport-limited (low-k_v) vs equilibrium (high-k_v) regimes
-    ax.axhline(J3_lim, color=rainbow_2[4], ls="--", lw=1.2,
-               label="Stage 3  ($k_v\\!\\to\\!\\infty$)")
-    ax.semilogx(kv[ok], J[ok], marker="o", ms=4, lw=1.6, color=rainbow_2[2],
-                label="Stage 4  $J_{\\lim}(k_v)$")
-    ax.axvline(kv_default, color="0.5", ls=":", lw=1.0)
+    ax.axhline(J3_lim, color=BLACK, ls="--", lw=1.0,
+               label="Stage 3 ($k_v\\!\\to\\!\\infty$)")
+    ax.semilogx(kv[ok], J[ok], marker="o", color=BLUE,
+                label="Stage 4 $J_{\\lim}(k_v)$")
+    ax.axvline(kv_default, color="0.5", ls=":", lw=0.8)
 
     # Mark the default operating point
     i_def = int(np.argmin(np.abs(kv - kv_default)))
     if np.isfinite(J[i_def]):
-        ax.plot(kv[i_def], J[i_def], marker="*", ms=11, color="0.15", zorder=5)
+        ax.plot(kv[i_def], J[i_def], marker="*", ms=9, color=RED, zorder=5)
         ax.annotate(f"default $k_v$\n{kv_default:.0e} s$^{{-1}}$",
                     xy=(kv[i_def], J[i_def]),
                     xytext=(8, -22), textcoords="offset points",
-                    fontsize=6, color="0.2", ha="left")
+                    fontsize=6, color=RED, ha="left")
 
-    ax.set_xlabel("$k_v = k_{MT}\\,a_{GL}$  (s$^{-1}$)", fontsize=_LABELSIZE)
-    ax.set_ylabel("Limiting current  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax.set_title("Limiting current vs interphase transfer rate", fontsize=9)
-    ax.legend(fontsize=6, frameon=False, loc="center right")
+    ax.set_xlabel("$k_v = k_{MT}\\,a_{GL}$ / s$^{-1}$")
+    ax.set_ylabel("Limiting current / mA cm$^{-2}$")
+    ax.set_title("Limiting current vs interphase rate")
+    ax.legend(loc="center right")
 
     fig.tight_layout()
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
     plt.close(fig)
 
 
@@ -591,26 +565,25 @@ def plot_voltage_breakdown_s4(
     Each loss is the volumetric power dissipated by a mechanism, divided by the
     cell current density, so the contributions sum EXACTLY to U_OCV - V:
 
-      ohmic, ionic : ∫_CL (i_L^2 / κ_eff) dx / I_cell           (Joule, Eq. 18)
-      ohmic, solid : ∫_CL (i_s^2 / σ_eff) dx / I_cell           (Joule, Eq. 18)
-      mass-transp. : ∫_CL i_ORR (RT/α_c F) ln((c_ref/c)^γ) dx / I_cell  (Eq. 23)
+      ohmic, ionic : integral(i_L^2 / kappa_eff) dx / I_cell           (Joule, Eq. 18)
+      ohmic, solid : integral(i_s^2 / sigma_eff) dx / I_cell           (Joule, Eq. 18)
+      mass-transp. : integral i_ORR (RT/alpha_c F) ln((c_ref/c)^gamma) dx / I_cell (Eq. 23)
                        gas  : reference c = pore-gas O2 c_gas
                        film : reference c = dissolved O2 c_ion (vs K_eq c_gas)
       kinetic      : (U_OCV - V) - (ohmic + mass-transport)     (activation)
 
-    The ohmic terms are the Joule integrals (NOT the boundary potential drops),
-    and the concentration/mass-transport terms use the kinetic RT/(α_c F) form
-    (NOT the Nernst RT/4F), per the power-loss derivation.  With these
-    definitions the activation overpotential is the well-defined remainder and
-    carries no thermodynamic or transport content.  The 'film' term is the
-    Stage-4 interphase (ionomer-film) resistance.
+    Colors keep the Stage 1 convention (kinetic=black, ohmic-ionic=blue,
+    ohmic-solid=green) and split the "mass-transport" family (red) into a
+    solid fill for the dominant ionomer-film term and a hatched fill of the
+    same color for the minor gas-phase term (Section 6: >4 series combine
+    the approved colors with a second visual channel, here a hatch pattern).
     """
     from assembly_stage4 import unpack_s4, compute_current_s4
     from transport import ohmic_face_fluxes
 
     NG, NC = mesh_gdl.N, mesh_cl.N
     dx     = mesh_cl.dx
-    RTaF   = p.R * p.T / (p.alpha * p.F)             # Eq. 23 prefactor RT/(α_c F)
+    RTaF   = p.R * p.T / (p.alpha * p.F)             # Eq. 23 prefactor RT/(alpha_c F)
     U_ocv  = float(p.U_ORR_eq(p.c_O2_bc))            # inlet-equilibrium OCV
 
     J, kin, film, gas, ohm_i, ohm_s, tot = ([] for _ in range(7))
@@ -631,7 +604,7 @@ def plot_voltage_breakdown_s4(
         oi = float(np.sum(iLc ** 2 / p.kappa_L_eff) * dx / Icell)
         os = float(np.sum(iSc ** 2 / p.sigma_s_eff) * dx / Icell)
 
-        # mass-transport (Eq. 23): RT/(α_c F) * γ * <ln(c_ref / c)>_w
+        # mass-transport (Eq. 23): RT/(alpha_c F) * gamma * <ln(c_ref / c)>_w
         mtg = float(RTaF * p.gamma * np.dot(
             w, np.log(np.maximum(p.c_O2_gas_inlet / c_gas, 1e-30))))
         mtf = float(RTaF * p.gamma * np.dot(
@@ -648,21 +621,24 @@ def plot_voltage_breakdown_s4(
               for v in (kin, film, gas, ohm_i, ohm_s)]
     labels = ["Kinetic (activation)", "Mass transp. (ionomer film)",
               "Mass transp. (gas-phase)", "Ohmic (ionic)", "Ohmic (solid)"]
-    colors = [rainbow_2[1], rainbow_2[3], rainbow_2[5], rainbow_2[0], rainbow_2[2]]
+    colors = [BLACK, RED, RED, BLUE, GREEN]
+    hatches = ["", "", "///", "", ""]
     tot = np.asarray(tot) * 1e3
 
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=7)
-    ax1, ax2 = axes[0], axes[1]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
     # ── Left: full stacked breakdown (sums exactly to U_OCV - V) ─────────────
-    ax1.stackplot(J, *stacks, labels=labels, colors=colors, alpha=0.9)
-    ax1.plot(J, tot, color="k", lw=1.0, ls="--", label="$U_{OCV}-V$")
-    ax1.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax1.set_ylabel("Voltage loss  (mV)", fontsize=_LABELSIZE)
-    ax1.set_title("Stage 4 applied-voltage breakdown (power-loss)", fontsize=9)
+    polys = ax1.stackplot(J, *stacks, labels=labels, colors=colors, alpha=0.9)
+    for poly, hatch in zip(polys, hatches):
+        if hatch:
+            poly.set_hatch(hatch)
+    ax1.plot(J, tot, color=BLACK, lw=1.0, ls="--", label="$U_{OCV}-V$")
+    ax1.set_xlabel(_CURRENT_LBL)
+    ax1.set_ylabel("Voltage loss / mV")
+    ax1.set_title("Stage 4 applied-voltage breakdown")
     # headroom so the legend sits above the filled stack, not over it
     ax1.set_ylim(0, float(tot.max()) * 1.5)
-    ax1.legend(loc="upper left", fontsize=5.5, frameon=False, ncol=2)
+    ax1.legend(loc="upper left", ncol=2)
 
     idx = int(np.argmax(J))
     parts = [s[idx] for s in stacks]
@@ -671,25 +647,24 @@ def plot_voltage_breakdown_s4(
              f"At $J_{{max}}$: kin {100*parts[0]/tt:.0f}%  "
              f"film {100*parts[1]/tt:.1f}%  gas {100*parts[2]/tt:.1f}%  "
              f"ohm {100*(parts[3]+parts[4])/tt:.1f}%",
-             transform=ax1.transAxes, ha="right", va="bottom", fontsize=5.5,
-             family="monospace",
+             transform=ax1.transAxes, ha="right", va="bottom", fontsize=6,
              bbox=dict(boxstyle="round,pad=0.25", fc="white", alpha=0.85))
 
     # ── Right: each non-kinetic loss INDIVIDUALLY (not stacked), expanded ─────
-    for s, c, lbl in [
-        (stacks[1], rainbow_2[3], "Mass transp. (film)"),
-        (stacks[3], rainbow_2[0], "Ohmic (ionic)"),
-        (stacks[2], rainbow_2[5], "Mass transp. (gas)"),
-        (stacks[4], rainbow_2[2], "Ohmic (solid)"),
+    for s, c, ls, lbl in [
+        (stacks[1], RED,   "-",  "Mass transp. (film)"),
+        (stacks[3], BLUE,  "-",  "Ohmic (ionic)"),
+        (stacks[2], RED,   "--", "Mass transp. (gas)"),
+        (stacks[4], GREEN, "-",  "Ohmic (solid)"),
     ]:
-        ax2.plot(J, s, color=c, lw=1.6, label=lbl)
-    ax2.set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=_LABELSIZE)
-    ax2.set_ylabel("Loss  (mV) — expanded", fontsize=_LABELSIZE)
-    ax2.set_title("Non-kinetic losses (each from zero)", fontsize=9)
-    ax2.legend(fontsize=5.5, frameon=False, loc="upper left")
+        ax2.plot(J, s, color=c, ls=ls, label=lbl)
+    ax2.set_xlabel(_CURRENT_LBL)
+    ax2.set_ylabel("Loss / mV")
+    ax2.set_title("Non-kinetic losses")
+    ax2.legend(loc="upper left")
 
+    add_panel_labels((ax1, ax2))
     fig.tight_layout()
     if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-        print(f"  Saved: {save_path}")
+        savefig_book(fig, save_path)
     plt.close(fig)

@@ -181,9 +181,12 @@ def main():
 def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
     """Stage 3 diagnostic plots: polarization overlay + ionomer O2 profiles."""
     import matplotlib.pyplot as plt
-    from customplot import gengrid, rainbow_2, warm_sequential
+    from book_style import (
+        FIGSIZE_LARGE, BOOK_COLORS, COLOR_CYCLE, add_panel_labels, savefig_book,
+    )
     from assembly_stage1 import compute_current as cc1, unpack
 
+    BLACK, BLUE = BOOK_COLORS["black"], BOOK_COLORS["blue"]
     NC = mesh_cl.N
     NG = mesh_gdl.N
 
@@ -192,45 +195,45 @@ def _plot_stage3(vs1, sols1, vs3, sols3, mesh_gdl, mesh_cl, p):
                    for u in sols3])
 
     # Two panels at the same width used by every other figure in the chapter
-    fig, axes, _ = gengrid(2, 1, size_inches=(6.5, 2.6), ticklabel_size=8)
+    fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
     # ── Panel 1: polarization overlay ────────────────────────────────────────
-    axes[0].plot(J1, vs1, marker="o", ms=3, lw=1.5, color=rainbow_2[1],
-                 label="Stage 1 (ionomer only)")
-    axes[0].plot(J3, vs3, marker="s", ms=3, lw=1.5, ls="--", color=rainbow_2[4],
-                 label="Stage 3 (gas transport)")
-    axes[0].set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=8)
-    axes[0].set_ylabel("$V_{\\mathrm{cathode}}$  (V vs SHE)", fontsize=8)
-    axes[0].set_title("Polarization: Stage 1 vs Stage 3", fontsize=9)
-    axes[0].legend(fontsize=6, frameon=False)
+    axes[0].plot(J1, vs1, marker="o", color=BLACK, label="Stage 1 (ionomer only)")
+    axes[0].plot(J3, vs3, marker="s", ls="--", color=BLUE, label="Stage 3 (gas transport)")
+    axes[0].set_xlabel("Current density / mA cm$^{-2}$")
+    axes[0].set_ylabel("$V_{\\mathrm{cathode}}$ / V vs. SHE")
+    axes[0].set_title("Polarization: Stage 1 vs Stage 3")
+    axes[0].legend()
 
     # ── Panel 2: ionomer O2 profiles at several voltages ─────────────────────
+    # 4 discrete voltage conditions -> the 4 approved colors (Section 5.1);
+    # the Stage 1 reference curve is a 5th, conceptually distinct series
+    # (a different model, not part of the Stage 3 voltage family), so it is
+    # drawn in black with a dash-dot line rather than adding a 5th color.
     xc_um  = mesh_cl.xc * 1e6
     n3 = len(vs3)
-    idx_samples = [0, n3 // 4, n3 // 2, 3 * n3 // 4, n3 - 1]
-    cidx   = np.linspace(2, len(warm_sequential) - 1, len(idx_samples)).round().astype(int)
-    colors = [warm_sequential[i] for i in cidx]
+    idx_samples = [0, n3 // 3, 2 * n3 // 3, n3 - 1]
+    colors = COLOR_CYCLE[:4]
     for idx, col in zip(idx_samples, colors):
         u3  = sols3[idx]
         V3  = vs3[idx]
         _, ln_c_cl_i, _, _ = unpack_s3(u3, NG, NC)
         c_ion = p.K_eq_gas_ion * np.exp(ln_c_cl_i)
-        axes[1].plot(xc_um, c_ion, color=col, lw=1.5, label=f"V={V3:.3f}")
+        axes[1].plot(xc_um, c_ion, color=col, label=f"$V$={V3:.3f}")
     # Stage 1 at highest current for comparison
     u1_hc = sols1[-1]
     ln1, _, _ = unpack(u1_hc, NC)
-    axes[1].plot(xc_um, np.exp(ln1), lw=1.2, ls="--", color=rainbow_2[1],
-                 label=f"S1 V={vs1[-1]:.3f}")
-    axes[1].set_xlabel("$x$  ($\\mu$m)", fontsize=8)
-    axes[1].set_ylabel("$c_{O_2}$ ionomer  (mol m$^{-3}$)", fontsize=8)
-    axes[1].set_title("Ionomer O$_2$ profiles: Stage 1 vs Stage 3", fontsize=9)
-    axes[1].legend(fontsize=6, frameon=False)
+    axes[1].plot(xc_um, np.exp(ln1), ls="-.", color=BLACK,
+                 label=f"S1 $V$={vs1[-1]:.3f}")
+    axes[1].set_xlabel("$x$ / $\\mu$m")
+    axes[1].set_ylabel("$c_{O_2}$ ionomer / mol m$^{-3}$")
+    axes[1].set_title("Ionomer O$_2$ profiles: Stage 1 vs Stage 3")
+    axes[1].legend()
 
+    add_panel_labels(axes)
     fig.tight_layout()
-    fig.subplots_adjust(left=0.12)
-    fig.savefig("stage3_results.png", bbox_inches="tight")
+    savefig_book(fig, "stage3_results.png")
     plt.close()
-    print("  Saved: stage3_results.png")
 
 
 if __name__ == "__main__":

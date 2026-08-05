@@ -113,22 +113,22 @@ def main():
 def _plot_comparison(vs1, sols1, vs2, sols2, mesh, p):
     """Overlay Stage 1 and Stage 2 polarization curves."""
     import matplotlib.pyplot as plt
-    from customplot import gengrid, rainbow_2
+    from book_style import FIGSIZE_LARGE, BOOK_COLORS, add_panel_labels, savefig_book
+
+    BLACK, BLUE = BOOK_COLORS["black"], BOOK_COLORS["blue"]
 
     J1 = np.array([compute_current(u, mesh, p) * 1e-4 * 1e3 for u in sols1])
     J2 = np.array([compute_current(u, mesh, p) * 1e-4 * 1e3 for u in sols2])
 
-    fig, axes, _ = gengrid(1, 2, size_inches=(6.5, 3.0), ticklabel_size=7)
+    fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
     # Polarization overlay
-    axes[0].plot(J1, vs1, marker="o", ms=4, lw=1.5, color=rainbow_2[1],
-                 label="Stage 1 (no-flux)")
-    axes[0].plot(J2, vs2, marker="s", ms=4, lw=1.5, ls="--", color=rainbow_2[4],
-                 label="Stage 2 (Sherwood)")
-    axes[0].set_xlabel("Current density  (mA cm$^{-2}$)", fontsize=8)
-    axes[0].set_ylabel("$V_{cathode}$  (V vs SHE)", fontsize=8)
-    axes[0].set_title("Polarization: Stage 1 vs Stage 2", fontsize=9)
-    axes[0].legend(fontsize=7, frameon=False)
+    axes[0].plot(J1, vs1, marker="o", color=BLACK, label="Stage 1 (no-flux)")
+    axes[0].plot(J2, vs2, marker="s", ls="--", color=BLUE, label="Stage 2 (Sherwood)")
+    axes[0].set_xlabel("Current density / mA cm$^{-2}$")
+    axes[0].set_ylabel("$V_{cathode}$ / V vs. SHE")
+    axes[0].set_title("Polarization: Stage 1 vs Stage 2")
+    axes[0].legend()
 
     # c_O2 profile at highest-current point
     N = mesh.N
@@ -137,19 +137,17 @@ def _plot_comparison(vs1, sols1, vs2, sols2, mesh, p):
     u2_hc = sols2[-1]
     ln1, _, _ = unpack(u1_hc, N)
     ln2, _, _ = unpack(u2_hc, N)
-    axes[1].plot(xc, np.exp(ln1), lw=1.5, color=rainbow_2[1],
-                 label=f"Stage 1  V={vs1[-1]:.3f}")
-    axes[1].plot(xc, np.exp(ln2), lw=1.5, ls="--", color=rainbow_2[4],
-                 label=f"Stage 2  V={vs2[-1]:.3f}")
-    axes[1].set_xlabel("x  (um)", fontsize=8)
-    axes[1].set_ylabel("$c_{O_2}$  (mol m$^{-3}$)", fontsize=8)
-    axes[1].set_title("O2 profile at highest-current point", fontsize=9)
-    axes[1].legend(fontsize=7, frameon=False)
+    axes[1].plot(xc, np.exp(ln1), color=BLACK, label=f"Stage 1  V={vs1[-1]:.3f}")
+    axes[1].plot(xc, np.exp(ln2), ls="--", color=BLUE, label=f"Stage 2  V={vs2[-1]:.3f}")
+    axes[1].set_xlabel("$x$ / $\\mu$m")
+    axes[1].set_ylabel("$c_{O_2}$ / mol m$^{-3}$")
+    axes[1].set_title("O2 profile at highest-current point")
+    axes[1].legend()
 
+    add_panel_labels(axes)
     fig.tight_layout()
-    fig.savefig("stage2_comparison.png", bbox_inches="tight")
+    savefig_book(fig, "stage2_comparison.png")
     plt.close()
-    print("  Saved: stage2_comparison.png")
 
 
 if __name__ == "__main__":

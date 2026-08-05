@@ -18,10 +18,9 @@ from params import Params
 from mesh import make_mesh
 from assembly_stage1 import unpack
 from cache import load_cache
-from customplot import gengrid, warm_sequential
+from book_style import FIGSIZE_LARGE_SQUARE, COLOR_CYCLE, add_panel_labels, savefig_book
 
 CACHE_PATH = Path(__file__).parent / "stage1_cache.npz"
-_LABELSIZE = 8
 
 
 def main():
@@ -35,11 +34,10 @@ def main():
     V_arr  = np.asarray(voltages)
     xc_um  = mesh.xc * 1e6
 
-    cidx   = np.linspace(2, len(warm_sequential) - 1, len(V_sample)).round().astype(int)
-    colors = [warm_sequential[i] for i in cidx]
+    colors = COLOR_CYCLE[:4]
     N = mesh.N
 
-    fig, axes, _ = gengrid(2, 2, size_inches=(6.5, 6.25), ticklabel_size=7)
+    fig, axes = plt.subplots(2, 2, figsize=FIGSIZE_LARGE_SQUARE)
     ax_c, ax_phiL, ax_phiS, ax_eta = (
         axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
     )
@@ -84,19 +82,18 @@ def main():
         y0, y1 = ax.get_ylim()
         ax.set_ylim(y0, y1 + 0.18 * (y1 - y0))
 
-    ax_c.set_ylabel("$c_{O_2}$  (mol m$^{-3}$)", fontsize=_LABELSIZE)
-    ax_phiL.set_ylabel("$\\phi_L$  (mV)", fontsize=_LABELSIZE)
-    ax_phiS.set_ylabel("$\\phi_s$  (V vs SHE)", fontsize=_LABELSIZE)
-    ax_eta.set_ylabel("$\\eta = (\\phi_s - \\phi_L) - U_{eq}$  (mV)", fontsize=_LABELSIZE)
+    ax_c.set_ylabel("$c_{O_2}$ / mol m$^{-3}$")
+    ax_phiL.set_ylabel("$\\phi_L$ / mV")
+    ax_phiS.set_ylabel("$\\phi_s$ / V vs. SHE")
+    ax_eta.set_ylabel("$\\eta = (\\phi_s - \\phi_L) - U_{eq}$ / mV")
 
     for ax in axes.flat:
-        ax.set_xlabel("$x$  ($\\mu$m)", fontsize=_LABELSIZE)
+        ax.set_xlabel("$x$ / $\\mu$m")
 
+    add_panel_labels(axes)
     fig.tight_layout()
-    out = "stage1_profiles_curved.png"
-    fig.savefig(out, bbox_inches="tight")
+    savefig_book(fig, "stage1_profiles_curved.png")
     plt.close(fig)
-    print(f"Saved: {out}")
 
 
 if __name__ == "__main__":

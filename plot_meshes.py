@@ -1,9 +1,12 @@
 """
 Schematic mesh graphics for the chapter / slides.
 
-Generates four publication-style figures (matched to the project's customplot
-house style, 300 dpi). Each panel is drawn by a reusable `_draw_*` helper so the
-standalone and combined figures stay in sync.
+Generates four publication-style figures (book house style per
+Figure_Preparation_Guide.pdf, 600 dpi -- fonts and panel labels only; these
+are illustrative 3D/isometric schematics, exempted from the guide's anti-3D
+and discrete-dataset color rules, see the import comment below). Each panel
+is drawn by a reusable `_draw_*` helper so the standalone and combined
+figures stay in sync.
 
     mesh_1d.png       a) generic 1D mesh (centres, faces, cell, dx)
                       b) the model's GDL + CL layout (CL finer)
@@ -28,14 +31,16 @@ Run:
 from __future__ import annotations
 from itertools import combinations
 import numpy as np
-import matplotlib
-matplotlib.rcParams["savefig.dpi"] = 600
 
-# customplot sets the SVG backend, Lato font and palettes on import; switch to
-# a headless Agg backend afterwards so this runs cleanly anywhere.
-from customplot import gengrid, cool_sequential, warm_sequential
+# customplot sets the SVG backend and its own font/palette on import; only the
+# two illustrative sequential palettes are still used below (region colors,
+# not "discrete dataset" colors, so the book palette doesn't apply to them --
+# see Figure_Preparation_Guide.pdf Section 5.1 vs these schematic diagrams).
+# book_style, imported after, overrides the font/rcParams customplot set.
+from customplot import cool_sequential, warm_sequential
 import matplotlib.pyplot as plt
 plt.switch_backend("Agg")
+import book_style  # noqa: F401  (import for its rcParams.update() side effect)
 import matplotlib.tri as mtri
 from matplotlib.colors import ListedColormap, to_rgba
 from matplotlib.patches import Polygon, Ellipse, FancyArrowPatch
@@ -162,7 +167,7 @@ def _draw_1d_generic(ax):
 
     ax.set_xlim(-0.7, N + 0.7)
     ax.set_ylim(-0.72, 1.25)
-    ax.set_title("Mesh (1D)", fontsize=9)
+    ax.set_title("Mesh (1D)", fontsize=8)
     ax.axis("off")
 
 
@@ -197,7 +202,7 @@ def _draw_1d_layout(ax, p):
 
     ax.set_xlim(-1.2, 12.2)
     ax.set_ylim(-1.05, 0.9)
-    ax.set_title("Model layout: gas-diffusion + catalyst layers", fontsize=9)
+    ax.set_title("Model layout: gas-diffusion + catalyst layers", fontsize=8)
     ax.axis("off")
 
 
@@ -230,7 +235,7 @@ def _draw_2d_generic(ax):
     ax.set_ylim(0.0, 1.0)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.set_title("Triangular mesh (2D)", fontsize=9, pad=8)
+    ax.set_title("Triangular mesh (2D)", fontsize=8, pad=8)
 
 
 def _draw_2d_layout(ax):
@@ -256,7 +261,7 @@ def _draw_2d_layout(ax):
     ax.set_ylim(0.0, 1.0)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.set_title("Model layout: flow channel + GDL/CL", fontsize=9, pad=8)
+    ax.set_title("Model layout: flow channel + GDL/CL", fontsize=8, pad=8)
 
 
 # ── 3D helpers ────────────────────────────────────────────────────────────────
@@ -407,7 +412,7 @@ def _draw_3d_generic(ax):
             bbox=dict(boxstyle="round,pad=0.1", fc="white", ec="none", alpha=0.85))
 
     _setup_3d(ax)
-    ax.set_title("Tetrahedral mesh (3D)", fontsize=9, pad=2)
+    ax.set_title("Tetrahedral mesh (3D)", fontsize=8, pad=2)
 
 
 def _serpentine_boxes(x0, x1, y0, y1, n_pass=7, inset=0.22):
@@ -648,31 +653,39 @@ def _draw_mea_callout(ax):
 
 
 def _panel_label(ax, lab, is3d=False):
-    """Manual a)/b)/... label (for figures not built through gengrid).
+    """(a)/(b)/... label per Figure_Preparation_Guide.pdf Section 8.
 
-    Uses identical axes-relative coordinates for 2D and 3D panels so the labels
-    line up vertically by column (a/c/e and b/d/f).
+    Placed just above the axes (matches book_style.panel_label) rather than
+    inside it, so it can't collide with the region/leader labels these
+    schematic panels draw near their own top edge. Uses identical
+    axes-relative coordinates for 2D and 3D panels so the labels line up
+    vertically by column (a/c/e and b/d/f). 3D axes need text2D (plain
+    .text() on an Axes3D plots in 3D data space, not screen space).
     """
     fn = ax.text2D if is3d else ax.text
-    fn(0.0, 1.03, f"{lab})", transform=ax.transAxes, fontsize=11,
-       va="bottom", ha="left")
+    fn(0.0, 1.02, f"({lab})", transform=ax.transAxes,
+       ha="left", va="bottom", fontsize=9, fontweight="bold")
 
 
 # ── Figures ───────────────────────────────────────────────────────────────────
 
 def plot_mesh_1d(p, save_path="mesh_1d.png"):
-    fig, axes, _ = gengrid(1, 2, size_inches=(6.5, 4.3), ticklabel_size=8)
+    fig, axes = plt.subplots(1, 2, figsize=(6.5, 4.3), dpi=600)
     _draw_1d_generic(axes[0])
     _draw_1d_layout(axes[1], p)
+    _panel_label(axes[0], "a")
+    _panel_label(axes[1], "b")
     fig.tight_layout(h_pad=1.6)
     _save(fig, save_path)
     plt.close(fig)
 
 
 def plot_mesh_2d(save_path="mesh_2d_tri.png"):
-    fig, axes, _ = gengrid(1, 2, size_inches=(5.8, 5.6), ticklabel_size=8)
+    fig, axes = plt.subplots(1, 2, figsize=(5.8, 5.6), dpi=600)
     _draw_2d_generic(axes[0])
     _draw_2d_layout(axes[1])
+    _panel_label(axes[0], "a")
+    _panel_label(axes[1], "b")
     fig.tight_layout(h_pad=2.0)
     _save(fig, save_path)
     plt.close(fig)
@@ -712,7 +725,8 @@ def plot_mesh_combined(p, save_path="mesh_combined.png"):
     for (r, c, lab) in [(0, 0, "a"), (0, 1, "b"), (1, 0, "c"),
                         (1, 1, "d"), (2, 0, "e"), (2, 1, "f")]:
         cell = gs[r, c].get_position(fig)
-        fig.text(cell.x0, cell.y1, f"{lab})", fontsize=11, va="bottom", ha="left")
+        fig.text(cell.x0, cell.y1 + 0.006, f"({lab})",
+                 fontsize=9, fontweight="bold", va="bottom", ha="left")
     _save(fig, save_path)
     plt.close(fig)
 
