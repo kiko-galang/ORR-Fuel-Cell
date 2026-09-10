@@ -1,0 +1,10 @@
+# Pinned to the versions these examples were last verified against.
+# matplotlib in particular affects figure output: minor releases shift
+# tight-layout metrics by a pixel or two. Curve geometry is unaffected.
+numpy==1.26.4
+scipy==1.15.1
+matplotlib==3.10.8
+
+# Optional: Arial is the book house-style font (book_style.py). Without it,
+# matplotlib falls back to Liberation Sans / DejaVu Sans and every label
+# changes shape. The models and all numerical output are unaffected.
