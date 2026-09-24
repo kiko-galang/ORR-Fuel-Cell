@@ -5,7 +5,7 @@ Identical to Stage 1 except the right-face O2 boundary condition at
 x = L_CL (CL/membrane interface) changes from:
 
     Stage 1:  J_O2[N] = 0                         (no-flux)
-    Stage 2:  J_O2[N] = -k_MT * c_O2[N-1]         (Sherwood-Reynolds Neumann)
+    Stage 2:  J_O2[N] = +k_MT * c_O2[N-1]         (Sherwood-Reynolds Robin)
 
 Physically: the membrane is opaque to O2 (c_O2_bulk_mem = 0), so
 the convective flux drives c_O2 toward zero at the membrane face.
@@ -37,9 +37,9 @@ def diffusion_face_fluxes_stage2(
     k_MT:    float,
 ) -> np.ndarray:
     """
-    O2 face fluxes with Sherwood-Reynolds Neumann BC at the right boundary.
+    O2 face fluxes with Sherwood-Reynolds Robin BC at the right boundary.
 
-    Right face:  J[N] = -k_MT * c_O2[N-1]
+    Right face:  J[N] = +k_MT * c_O2[N-1]
                         (convective loss toward membrane-side bulk c = 0)
     """
     c = np.exp(ln_cO2)
@@ -52,8 +52,8 @@ def diffusion_face_fluxes_stage2(
     # Interior faces
     J[1:N] = -D_eff * np.diff(c) / dx
 
-    # Right boundary: Sherwood-Reynolds Neumann (membrane-side bulk = 0)
-    J[N] = -k_MT * c[N - 1]
+    # Right boundary: Sherwood-Reynolds Robin (membrane-side bulk = 0)
+    J[N] = +k_MT * c[N - 1]   # Robin: J = k_MT·(c − c_bulk), c_bulk = 0 → O2 leaves via membrane
 
     return J
 
@@ -103,7 +103,7 @@ def residual_stage2(
 
     # FV residuals
     R_O2   = J_O2[:-1] - J_O2[1:]  +  (-i_ORR / (N_ELEC * p.F)) * dx
-    R_phiL = i_L[:-1]  - i_L[1:]   +  (+i_ORR) * dx
-    R_phiS = i_s[:-1]  - i_s[1:]   +  (-i_ORR) * dx
+    R_phiL = i_L[:-1]  - i_L[1:]   +  (-i_ORR) * dx   # protons consumed: d i_L/dx = -i_ORR
+    R_phiS = i_s[:-1]  - i_s[1:]   +  (+i_ORR) * dx   # electrons consumed: d i_s/dx = +i_ORR
 
     return pack(R_O2, R_phiL, R_phiS)

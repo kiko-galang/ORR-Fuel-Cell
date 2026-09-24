@@ -152,18 +152,18 @@ def main():
     phi_L = d["phi_L"]
     phi_s = d["phi_s"]
 
-    check1 = bool(np.all(np.diff(phi_s) <= 0.0))
-    check2 = bool(np.all(phi_L >= -1e-6))
+    check1 = bool(np.all(np.diff(phi_s) >= 0.0))
+    check2 = bool(np.all(phi_L <= 1e-6))
     check3 = bool(c_gdl[0] >= c_gdl[-1] and c_cl[0] >= c_cl[-1])
     check4 = bool(np.all(p_O2 >= -1e-6) and np.all(p_O2 <= p.p_O2_inlet + 1e-4))
     err_cv = abs(d["i_s_left"] - d["i_total"]) / (abs(d["i_total"]) + 1e-10) * 100
     check5 = err_cv < 1.0
 
-    print(f"    phi_s monotone decreasing   : {'PASS' if check1 else 'FAIL'}")
-    print(f"    phi_L >= 0 throughout       : {'PASS' if check2 else 'FAIL'}")
+    print(f"    phi_s monotone increasing   : {'PASS' if check1 else 'FAIL'}")
+    print(f"    phi_L <= 0 throughout       : {'PASS' if check2 else 'FAIL'}")
     print(f"    c_O2_gas depletes GDL->mem  : {'PASS' if check3 else 'FAIL'}")
     print(f"    p_O2 in [0, 0.21] atm range : {'PASS' if check4 else 'FAIL'}")
-    print(f"    i_s(x=0) vs integral < 1%   : {'PASS' if check5 else 'FAIL'}"
+    print(f"    -i_s(x=0) vs integral < 1%  : {'PASS' if check5 else 'FAIL'}"
           f"  (err={err_cv:.3f}%)")
     print(f"\n    J_max = {d['i_total']*1e-4*1e3:.2f} mA/cm2  at V = {V_hc:.3f} V")
     print(f"    p_O2 at CL/mem face: {p_O2[-1]*1e3:.3f} matm"

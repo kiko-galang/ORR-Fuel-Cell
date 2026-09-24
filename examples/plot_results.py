@@ -278,8 +278,8 @@ def plot_consistency_check(
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=FIGSIZE_LARGE)
 
     ax1.plot(V, integ, color=BLACK, ls="-",  label="$\\int i_{ORR}\\,dx$")
-    ax1.plot(V, solid, color=BLUE,  ls="--", label="$i_s(x=0)$")
-    ax1.plot(V, ionic, color=GREEN, ls=":",  label="$i_L(x=L_{CL})$")
+    ax1.plot(V, solid, color=BLUE,  ls="--", label="$-i_s(x=0)$")
+    ax1.plot(V, ionic, color=GREEN, ls=":",  label="$-i_L(x=L_{CL})$")
     ax1.set_xlabel("$V_{\\mathrm{cathode}}$ / V vs. SHE")
     ax1.set_ylabel(_CURRENT_LBL)
     ax1.legend()
@@ -351,8 +351,9 @@ def plot_flux_profiles(
         )
 
         ax_J.plot(xf_um, J_O2 * 1e6, color=col, label=lbl)     # -> umol m-2 s-1
-        ax_i.plot(xf_um, i_s  * conv, color=col, ls="-")
-        ax_i.plot(xf_um, i_L  * conv, color=col, ls="--")
+        # Cathodic current flows in −x (i_s, i_L ≤ 0); plot −i so the handoff reads positive.
+        ax_i.plot(xf_um, -i_s * conv, color=col, ls="-")
+        ax_i.plot(xf_um, -i_L * conv, color=col, ls="--")
 
     ax_J.set_xlabel(_POSITION_UM)
     ax_J.set_ylabel("$J_{O_2}$ / $\\mu$mol m$^{-2}$ s$^{-1}$")
@@ -364,8 +365,8 @@ def plot_flux_profiles(
     ax_i.set_title("Solid (—) and ionic (– –) current sharing")
     ax_i.legend(
         handles=[
-            Line2D([0], [0], color="0.35", ls="-",  label="solid  $i_s$"),
-            Line2D([0], [0], color="0.35", ls="--", label="ionic  $i_L$"),
+            Line2D([0], [0], color="0.35", ls="-",  label="solid  $-i_s$"),
+            Line2D([0], [0], color="0.35", ls="--", label="ionic  $-i_L$"),
         ],
     )
 

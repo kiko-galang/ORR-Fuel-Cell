@@ -87,8 +87,8 @@ rather than an equilibrium estimate.
 ## Verifying a run
 
 Each script prints its own checks, and it is worth watching them rather than
-going straight to the figures. Stage 1 confirms that `phi_s` decreases
-monotonically, that `phi_L ≥ 0`, that O2 depletes from inlet to membrane, and
+going straight to the figures. Stage 1 confirms that `phi_s` increases
+monotonically into the CL, that `phi_L ≤ 0`, that O2 depletes from inlet to membrane, and
 that the total current agrees when computed three independent ways (from the
 solid-phase flux, the ionic flux, and the volumetric reaction integral). Stage
 4 adds a global O2 mass balance — GDL inflow against total ORR consumption —

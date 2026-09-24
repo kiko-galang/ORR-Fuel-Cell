@@ -291,8 +291,8 @@ def _verify(p, mesh_gdl, mesh_cl, u_warm, vs3, sols3, J3, vs4, sols4):
     e_ionic = abs(d["i_L_right"] - d["i_total"]) / (abs(d["i_total"]) + 1e-10) * 100
     check4  = e_solid < 1.0 and e_ionic < 1.0
     print(f"      integral   i_ORR  = {d['i_total']*1e-1:.4f} mA/cm2")
-    print(f"      solid flux i_s(0) : err = {e_solid:.4f} %")
-    print(f"      ionic flux i_L(L) : err = {e_ionic:.4f} %")
+    print(f"      solid flux -i_s(0): err = {e_solid:.4f} %")
+    print(f"      ionic flux -i_L(L): err = {e_ionic:.4f} %")
     print(f"      -> {'PASS' if check4 else 'FAIL'}")
 
     # ---- 5. Physicality -------------------------------------------------------
@@ -301,15 +301,15 @@ def _verify(p, mesh_gdl, mesh_cl, u_warm, vs3, sols3, J3, vs4, sols4):
     phi_L, phi_s = d["phi_L"], d["phi_s"]
     pos      = bool(np.all(c_gdl > 0) and np.all(c_cl > 0) and np.all(c_ion > 0))
     below_eq = bool(np.all(c_ion <= c_eq * (1.0 + 1e-6)))
-    mono_s   = bool(np.all(np.diff(phi_s) <= 1e-12))
-    pos_L    = bool(np.all(phi_L >= -1e-6))
+    mono_s   = bool(np.all(np.diff(phi_s) >= -1e-12))
+    neg_L    = bool(np.all(phi_L <= 1e-6))
     J0       = compute_current_s4(sols4[0], mesh_gdl, mesh_cl, p) * 1e-1   # mA/cm2
     ocv_ok   = abs(J0) < 1.0
-    check5   = pos and below_eq and mono_s and pos_L and ocv_ok
+    check5   = pos and below_eq and mono_s and neg_L and ocv_ok
     print(f"      all concentrations > 0       : {'PASS' if pos else 'FAIL'}")
     print(f"      c_ion <= K_eq*c_gas          : {'PASS' if below_eq else 'FAIL'}")
-    print(f"      phi_s monotone decreasing    : {'PASS' if mono_s else 'FAIL'}")
-    print(f"      phi_L >= 0 throughout        : {'PASS' if pos_L else 'FAIL'}")
+    print(f"      phi_s monotone increasing    : {'PASS' if mono_s else 'FAIL'}")
+    print(f"      phi_L <= 0 throughout        : {'PASS' if neg_L else 'FAIL'}")
     print(f"      near-OCV current < 1 mA/cm2  : {'PASS' if ocv_ok else 'FAIL'}"
           f"  (J0 = {J0:.4f} mA/cm2)")
     print(f"      -> {'PASS' if check5 else 'FAIL'}")

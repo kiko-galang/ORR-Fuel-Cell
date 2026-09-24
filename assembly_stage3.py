@@ -163,8 +163,8 @@ def residual_stage3(
     # ── FV residuals  F = J_left - J_right + S*dx ─────────────────────────────
     R_gdl  = J_gdl[:-1] - J_gdl[1:]                                   # (NG,)
     R_cgas = J_cl[:-1]  - J_cl[1:]  + (-i_ORR / (N_ELEC * p.F)) * dxC  # (NC,)
-    R_phiL = i_L[:-1]   - i_L[1:]   + (+i_ORR) * dxC                  # (NC,)
-    R_phiS = i_s[:-1]   - i_s[1:]   + (-i_ORR) * dxC                  # (NC,)
+    R_phiL = i_L[:-1]   - i_L[1:]   + (-i_ORR) * dxC                  # (NC,) protons consumed
+    R_phiS = i_s[:-1]   - i_s[1:]   + (+i_ORR) * dxC                  # (NC,) electrons consumed
 
     return pack_s3(R_gdl, R_cgas, R_phiL, R_phiS)
 
@@ -222,6 +222,8 @@ def diagnostics_s3(u: np.ndarray, mesh_gdl, mesh_cl, p, V_cathode: float) -> dic
         "phi_s":      phi_s,
         "i_ORR":      i_ORR,
         "i_total":    i_total,
-        "i_s_left":   float(i_s_left),
-        "i_L_right":  float(i_L_right),
+        # Cathodic current flows in −x, so these hold −i_s(0) and −i_L(L_CL)
+        # (cathodic-positive, comparable with i_total).
+        "i_s_left":   float(-i_s_left),
+        "i_L_right":  float(-i_L_right),
     }

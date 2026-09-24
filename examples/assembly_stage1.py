@@ -12,15 +12,15 @@ FV residual form  F[cell] = J_left − J_right + S·dx = 0
 
 Equations per cell:
     R_O2  :  J_O2[f] − J_O2[f+1] + (−i_ORR / 4F)·dx  = 0   [mol/m²/s]
-    R_phiL:  i_L[f]  − i_L[f+1]  + (+i_ORR)·dx        = 0   [A/m²]
-    R_phiS:  i_s[f]  − i_s[f+1]  + (−i_ORR)·dx        = 0   [A/m²]
+    R_phiL:  i_L[f]  − i_L[f+1]  + (−i_ORR)·dx        = 0   [A/m²]
+    R_phiS:  i_s[f]  − i_s[f+1]  + (+i_ORR)·dx        = 0   [A/m²]
 
-Sign conventions (all consistent with the Implementation Guide §3):
+Sign conventions:
     i_ORR > 0  for cathodic ORR (O2 consumed)
-    phi_L ≥ 0 inside CL; = 0 at membrane (Dirichlet)
-    phi_s ≈ V_cathode at GDL (Dirichlet); slightly lower at membrane (IR drop)
-    i_L > 0 (flows from GDL toward membrane, grows from 0 to i_total)
-    i_s > 0 (flows from GDL into CL, decreases from i_total to 0)
+    phi_L ≤ 0 inside CL; = 0 at membrane (Dirichlet)
+    phi_s = V_cathode at GDL; rises slightly into the CL (ohmic drop)
+    i_L ≤ 0 (protons flow membrane → GDL; 0 at x=0, −i_total at x=L_CL)
+    i_s ≤ 0 (conventional current flows −x; −i_total at x=0, 0 at x=L_CL)
 """
 from __future__ import annotations
 import numpy as np
@@ -92,8 +92,8 @@ def residual_stage1(
 
     # ── FV residuals  (F = J_left − J_right + S·dx) ──────────────────────────
     R_O2   = J_O2[:-1] - J_O2[1:]  +  (-i_ORR / (N_ELEC * p.F)) * dx
-    R_phiL = i_L[:-1]  - i_L[1:]   +  (+i_ORR) * dx
-    R_phiS = i_s[:-1]  - i_s[1:]   +  (-i_ORR) * dx
+    R_phiL = i_L[:-1]  - i_L[1:]   +  (-i_ORR) * dx   # protons consumed: d i_L/dx = -i_ORR
+    R_phiS = i_s[:-1]  - i_s[1:]   +  (+i_ORR) * dx   # electrons consumed: d i_s/dx = +i_ORR
 
     return pack(R_O2, R_phiL, R_phiS)
 
@@ -102,8 +102,8 @@ def compute_current(u: np.ndarray, mesh, p) -> float:
     """
     Total current density [A/m²_geo] by integrating volumetric ORR rate.
 
-    Equivalent to  i_s(x=0) = −σ_eff · dφ_s/dx|_{x=0}
-    and          i_L(x=L_CL) = −κ_eff · dφ_L/dx|_{x=L_CL}.
+    Equivalent to  −i_s(x=0)    =  σ_eff · dφ_s/dx|_{x=0}
+    and            −i_L(x=L_CL) =  κ_eff · dφ_L/dx|_{x=L_CL}.
     All three should agree to < 1 % for a converged solution.
     """
     N = mesh.N
@@ -116,7 +116,8 @@ def current_from_flux(u: np.ndarray, mesh, p, V_cathode: float) -> dict:
     """
     Compute i_total three independent ways for the consistency check (§11).
 
-    Returns dict with keys 'integral', 'solid_flux', 'ionic_flux'.
+    Returns dict with keys 'integral', 'solid_flux', 'ionic_flux', all
+    cathodic-positive (the flux values are −i_s(0) and −i_L(L_CL)).
     """
     N  = mesh.N
     dx = mesh.dx
@@ -134,6 +135,7 @@ def current_from_flux(u: np.ndarray, mesh, p, V_cathode: float) -> dict:
 
     return {
         "integral":    i_integ,
-        "solid_flux":  float(i_solid_left),
-        "ionic_flux":  float(i_ionic_right),
+        # Cathodic current flows in −x, so report −i to compare with +∫i_ORR dx.
+        "solid_flux":  float(-i_solid_left),
+        "ionic_flux":  float(-i_ionic_right),
     }

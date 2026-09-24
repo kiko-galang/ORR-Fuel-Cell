@@ -46,8 +46,8 @@ Governing equations (FV residual  F = J_left - J_right + S*dx):
     CL gas  : Maxwell-Stefan diffusion, source  S = -R_PT
     CL ion  : Fickian diffusion (D_O2_eff), no-flux at BOTH faces,
               source  S = +R_PT - i_ORR/(N_ELEC*F)
-    phi_L   : ohmic, source +i_ORR        (unchanged from Stage 3)
-    phi_s   : ohmic, source -i_ORR        (unchanged from Stage 3)
+    phi_L   : ohmic, source -i_ORR        (unchanged from Stage 3)
+    phi_s   : ohmic, source +i_ORR        (unchanged from Stage 3)
 
 Newton step clamping:
     ln_c (gdl gas, cl gas, ion) : +/- 5  (log units)
@@ -177,8 +177,8 @@ def residual_stage4(
     GDL gas  (NG):  R = J_gdl[i] - J_gdl[i+1]                       (no source)
     CL gas   (NC):  R = J_cgas[j] - J_cgas[j+1] + (-R_PT)*dx
     CL ion   (NC):  R = J_ion[j]  - J_ion[j+1]  + (R_PT - i_ORR/(N_ELEC*F))*dx
-    phi_L    (NC):  R = i_L[j]    - i_L[j+1]    + (+i_ORR)*dx
-    phi_s    (NC):  R = i_s[j]    - i_s[j+1]    + (-i_ORR)*dx
+    phi_L    (NC):  R = i_L[j]    - i_L[j+1]    + (-i_ORR)*dx
+    phi_s    (NC):  R = i_s[j]    - i_s[j+1]    + (+i_ORR)*dx
     """
     NG  = mesh_gdl.N
     NC  = mesh_cl.N
@@ -228,8 +228,8 @@ def residual_stage4(
     R_gdl  = J_gdl[:-1]  - J_gdl[1:]                                          # (NG,)
     R_cgas = J_cgas[:-1] - J_cgas[1:] + (-R_PT) * dxC                         # (NC,)
     R_cion = J_ion[:-1]  - J_ion[1:]  + (R_PT - i_ORR / (N_ELEC * p.F)) * dxC  # (NC,)
-    R_phiL = i_L[:-1]    - i_L[1:]    + (+i_ORR) * dxC                        # (NC,)
-    R_phiS = i_s[:-1]    - i_s[1:]    + (-i_ORR) * dxC                        # (NC,)
+    R_phiL = i_L[:-1]    - i_L[1:]    + (-i_ORR) * dxC                        # (NC,) protons consumed
+    R_phiS = i_s[:-1]    - i_s[1:]    + (+i_ORR) * dxC                        # (NC,) electrons consumed
 
     return pack_s4(R_gdl, R_cgas, R_cion, R_phiL, R_phiS)
 
@@ -296,8 +296,10 @@ def diagnostics_s4(u: np.ndarray, mesh_gdl, mesh_cl, p, V_cathode: float) -> dic
         "phi_s":      phi_s,
         "i_ORR":      i_ORR,
         "i_total":    i_total,
-        "i_s_left":   float(i_s_left),
-        "i_L_right":  float(i_L_right),
+        # Cathodic current flows in −x, so these hold −i_s(0) and −i_L(L_CL)
+        # (cathodic-positive, comparable with i_total).
+        "i_s_left":   float(-i_s_left),
+        "i_L_right":  float(-i_L_right),
         "J_gdl_in":   float(J_gdl_in),
         "consumed":   float(consumed),
     }

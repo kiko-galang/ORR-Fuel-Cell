@@ -128,14 +128,14 @@ def _quick_checks(voltages, solutions, mesh, p):
     V_cath = voltages[idx_hc]
     ln_cO2, phi_L, phi_s = unpack(u, N)
 
-    # 1. phi_s monotonically decreasing from GDL to membrane
+    # 1. phi_s rises monotonically from the GDL into the CL (electrons flow uphill)
     d_phis = np.diff(phi_s)
-    check1 = bool(np.all(d_phis <= 0.0))
-    print(f"    phi_s monotone decreasing  : {'PASS' if check1 else 'FAIL'}")
+    check1 = bool(np.all(d_phis >= 0.0))
+    print(f"    phi_s monotone increasing  : {'PASS' if check1 else 'FAIL'}")
 
-    # 2. phi_L >= 0 throughout (positive ionic potential relative to membrane)
-    check2 = bool(np.all(phi_L >= -1e-6))
-    print(f"    phi_L >= 0 throughout      : {'PASS' if check2 else 'FAIL'}")
+    # 2. phi_L <= 0 throughout (protons flow downhill from the membrane into the CL)
+    check2 = bool(np.all(phi_L <= 1e-6))
+    print(f"    phi_L <= 0 throughout      : {'PASS' if check2 else 'FAIL'}")
 
     # 3. c_O2 depletes from inlet toward membrane
     c_O2 = np.exp(ln_cO2)

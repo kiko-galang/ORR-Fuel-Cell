@@ -2,7 +2,7 @@
 Stage 2 driver: Sherwood-Reynolds Neumann BC for O2 at the CL/membrane face.
 
 Physics change from Stage 1:
-    J_O2[N] = -k_MT * c_O2[N-1]    (was: 0, no-flux)
+    J_O2[N] = +k_MT * c_O2[N-1]    (was: 0, no-flux)
 
 Expected outcome: plots visually identical to Stage 1.  Any discrepancy
 larger than a few percent at the membrane-facing cells indicates a bug.
@@ -44,7 +44,7 @@ def main():
     print("  Stage 2: Sherwood-Reynolds Neumann BC")
     print("=" * 55)
     print(f"  k_MT = {K_MT_DEFAULT:.3e} m/s")
-    print(f"  (J_O2 at membrane = -k_MT * c_O2[N-1])")
+    print(f"  (J_O2 at membrane = +k_MT * c_O2[N-1])")
 
     # ── Warm-start from Stage 1 ───────────────────────────────────────────────
     if not cache_exists(CACHE_S1):
@@ -94,11 +94,11 @@ def main():
     ln_cO2, phi_L, phi_s = unpack(u, N)
     c_O2 = np.exp(ln_cO2)
 
-    check1 = bool(np.all(np.diff(phi_s) <= 0.0))
-    check2 = bool(np.all(phi_L >= -1e-6))
+    check1 = bool(np.all(np.diff(phi_s) >= 0.0))
+    check2 = bool(np.all(phi_L <= 1e-6))
     check3 = bool(c_O2[0] >= c_O2[-1])
-    print(f"    phi_s monotone decreasing : {'PASS' if check1 else 'FAIL'}")
-    print(f"    phi_L >= 0 throughout     : {'PASS' if check2 else 'FAIL'}")
+    print(f"    phi_s monotone increasing : {'PASS' if check1 else 'FAIL'}")
+    print(f"    phi_L <= 0 throughout     : {'PASS' if check2 else 'FAIL'}")
     print(f"    c_O2 depletes inlet->mem  : {'PASS' if check3 else 'FAIL'}")
 
     # ── Plots ─────────────────────────────────────────────────────────────────
